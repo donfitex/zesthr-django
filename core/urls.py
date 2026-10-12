@@ -6,7 +6,8 @@ from . import views as v
 urlpatterns = [
     path("login/", auth.LoginView.as_view(template_name="login.html"), name="login"),
     path("logout/", auth.LogoutView.as_view(), name="logout"),
-    path("", v.dashboard, name="dashboard"),
+    path("", v.home, name="home"),
+    path("dashboard/", v.dashboard, name="dashboard"),
     path("employees/", v.EmployeeList.as_view(), name="employee_list"),
     path("employees/add/", v.EmployeeCreate.as_view(), name="employee_add"),
     path("employees/<int:pk>/edit/", v.EmployeeUpdate.as_view(), name="employee_edit"),
@@ -19,4 +20,8 @@ urlpatterns = [
     path("reports/monthly/", v.monthly_report, name="report"),
     path("payroll/", v.payroll, name="payroll"),
     path("payroll/slip/<int:pk>/", v.slip, name="slip"),
+    path("holidays/", v.holidays_list, name="holidays"),
+    path("leaves/", v.leaves_list, name="leaves_list"),
+    path("leaves/apply/", v.leave_apply, name="leave_apply"),
+    path("leaves/<int:pk>/action/", v.leave_action, name="leave_action"),
 ]

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Apply for Leave | HROS{% endblock %}
+
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Apply for Leave</h1>
+    <p style="margin: .25rem 0 0; color: var(--mut); font-size: .95rem;">
+      Submitting leave application for: <b>{{ emp.name }}</b> ({{ emp.designation }})
+    </p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{% url 'leaves_list' %}">&larr; Back to Leaves</a>
+  </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1.25fr 1fr; gap: 1.5rem; align-items: start;">
+  <form method="post" class="card form" style="margin: 0; max-width: 100%;">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="toast error" style="margin-bottom: 1.2rem;">
+        {% for err in form.non_field_errors %}
+          <div>{{ err }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <label>
+      Leave Type
+      {{ form.leave_type }}
+      {% if form.leave_type.errors %}
+        {% for e in form.leave_type.errors %}<small class="err">{{ e }}</small>{% endfor %}
+      {% endif %}
+      <small style="color: var(--mut); margin-top: .3rem;">
+        Choose <b>Sick Leave (SL)</b> for medical illness (strictly 1 day per calendar month).
+      </small>
+    </label>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+      <label>
+        Start Date
+        {{ form.start_date }}
+        {% if form.start_date.errors %}
+          {% for e in form.start_date.errors %}<small class="err">{{ e }}</small>{% endfor %}
+        {% endif %}
+      </label>
+
+      <label>
+        End Date
+        {{ form.end_date }}
+        {% if form.end_date.errors %}
+          {% for e in form.end_date.errors %}<small class="err">{{ e }}</small>{% endfor %}
+        {% endif %}
+      </label>
+    </div>
+
+    <label>
+      Reason for Leave
+      {{ form.reason }}
+      {% if form.reason.errors %}
+        {% for e in form.reason.errors %}<small class="err">{{ e }}</small>{% endfor %}
+      {% endif %}
+      <small style="color: var(--mut); margin-top: .3rem;">
+        Please provide a concise justification for your manager's review.
+      </small>
+    </label>
+
+    <div class="actions" style="margin-top: 1.5rem;">
+      <button type="submit" class="btn" style="padding: .7rem 1.6rem;">Submit Application</button>
+      <a class="btn ghost" href="{% url 'leaves_list' %}">Cancel</a>
+    </div>
+  </form>
+
+  <!-- POLICY INFO CARD -->
+  <div style="display: flex; flex-direction: column; gap: 1.2rem;">
+    <div class="card" style="margin: 0; border-left: 4px solid var(--teal);">
+      <h3 style="margin-top: 0; color: var(--navy);">📋 Sick Leave Policy</h3>
+      <p style="font-size: .92rem; color: var(--mut); line-height: 1.55;">
+        As per company HR rules:
+      </p>
+      <ul style="font-size: .9rem; color: var(--ink); padding-left: 1.2rem; line-height: 1.7; margin: .5rem 0 1rem;">
+        <li>Each employee is entitled to <b>strictly 1 Sick Leave per month</b>.</li>
+        <li>Sick Leave balance resets on the 1st of every calendar month (no carry-forward).</li>
+        <li>Sick Leave requests cannot span multiple days within the same month.</li>
+        <li>Approved Sick Leaves are counted as paid leaves and do not incur salary deduction.</li>
+      </ul>
+
+      <div style="background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 1rem;">
+        <div style="display: flex; justify-content: space-between; font-size: .88rem; margin-bottom: .4rem;">
+          <span style="color: var(--mut);">Sick Leave for {{ today|date:"F Y" }}:</span>
+          <b>{{ sick_rem }} day(s) remaining</b>
+        </div>
+        <div class="quota-bar" style="margin-bottom: .4rem;">
+          <div class="quota-bar-fill {% if sick_rem == 0 %}empty{% endif %}"
+               style="width: {% if sick_rem > 0 %}100%{% else %}0%{% endif %};"></div>
+        </div>
+        <small style="color: var(--mut);">
+          Used this month: <b>{{ sick_used }} / 1 day</b>
+        </small>
+      </div>
+    </div>
+
+    <div class="card" style="margin: 0;">
+      <h3 style="margin-top: 0; color: var(--navy); font-size: .95rem;">💡 Need to check public holidays?</h3>
+      <p style="font-size: .88rem; color: var(--mut); margin-bottom: .8rem;">
+        Check our official Indian public holidays calendar before applying to avoid applying on gazetted non-working days.
+      </p>
+      <a href="{% url 'holidays' %}" class="btn ghost sm">View Indian Govt Holidays 🇮🇳</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

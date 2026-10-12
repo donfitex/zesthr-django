@@ -1,0 +1,112 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Dashboard{% endblock %} | HROS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
+<script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';</script>
+</head>
+<body>
+{% if user.is_authenticated %}
+{% with n=request.resolver_match.url_name %}
+<aside class="side" id="side">
+  <a class="brand hros-brand-link" href="{% url 'dashboard' %}">
+    <svg class="hros-logo-icon" width="34" height="34" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="hrosGradSide" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0284c7" />
+          <stop offset="50%" stop-color="#0d9488" />
+          <stop offset="100%" stop-color="#10b981" />
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="10" fill="url(#hrosGradSide)" />
+      <path d="M12 11V29" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M28 11V29" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M12 20H28" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+      <circle cx="20" cy="20" r="3.5" fill="#ffffff"/>
+      <circle cx="20" cy="20" r="1.5" fill="#0d9488"/>
+      <circle cx="29" cy="11" r="2.2" fill="#a7f3d0"/>
+    </svg>
+    <div class="hros-brand-text">
+      <span class="hros-title">HROS</span>
+      <span class="hros-sub">CORE</span>
+    </div>
+  </a>
+  <nav>
+    <a class="{% if n == 'home' %}on{% endif %}" href="{% url 'home' %}">Overview (Home)</a>
+    <a class="{% if n == 'dashboard' %}on{% endif %}" href="{% url 'dashboard' %}">
+      {% if user.is_staff or user.is_superuser %}Dashboard{% else %}My Dashboard{% endif %}
+    </a>
+
+    {% if user.is_staff or user.is_superuser %}
+    <details {% if 'employee' in n %}open{% endif %}><summary>Employees</summary>
+      <a class="{% if n == 'employee_list' %}on{% endif %}" href="{% url 'employee_list' %}">All employees</a>
+      <a class="{% if n == 'employee_add' %}on{% endif %}" href="{% url 'employee_add' %}">Add employee</a>
+    </details>
+    <details {% if 'attendance' in n %}open{% endif %}><summary>Attendance</summary>
+      <a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Today: check-in / out</a>
+      <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">Attendance log</a>
+      <a class="{% if n == 'attendance_add' %}on{% endif %}" href="{% url 'attendance_add' %}">Add manual entry</a>
+    </details>
+    <details {% if 'leave' in n %}open{% endif %}><summary>Leaves</summary>
+      <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">Leave requests</a>
+      <a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply leave</a>
+    </details>
+    <details {% if n == 'report' %}open{% endif %}><summary>Reports</summary>
+      <a class="{% if n == 'report' %}on{% endif %}" href="{% url 'report' %}">Monthly attendance report</a>
+    </details>
+    <details {% if n == 'payroll' or n == 'slip' %}open{% endif %}><summary>Payroll</summary>
+      <a class="{% if n == 'payroll' %}on{% endif %}" href="{% url 'payroll' %}">Salary register</a>
+    </details>
+    <a class="{% if n == 'holidays' %}on{% endif %}" href="{% url 'holidays' %}">Govt Holidays 🇮🇳</a>
+    <a href="/admin/">Admin panel</a>
+
+    {% else %}
+    <a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Punch Attendance</a>
+    <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">My Attendance Log</a>
+    <details {% if 'leave' in n %}open{% endif %}><summary>Leaves</summary>
+      <a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply Leave (1 SL/Mo)</a>
+      <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">My Leave Requests</a>
+    </details>
+    <a class="{% if n == 'holidays' %}on{% endif %}" href="{% url 'holidays' %}">Govt Holidays 🇮🇳</a>
+    {% endif %}
+  </nav>
+</aside>
+<div class="main">
+  <header class="top">
+    <button class="icon" id="menu" aria-label="Toggle menu">☰</button>
+    <span class="clock" id="clock"></span>
+    <span class="spacer"></span>
+    <button class="icon" id="theme" aria-label="Switch light or dark theme">◐</button>
+    <span class="who">
+      {% if user.employee_profile %}
+        {{ user.employee_profile.name }} <span class="hros-badge">EMP</span>
+      {% elif user.is_staff or user.is_superuser %}
+        {{ user.username }} <span class="hros-badge">HR ADMIN</span>
+      {% else %}
+        {{ user.username }}
+      {% endif %}
+    </span>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn ghost sm">Sign out</button></form>
+  </header>
+  <main class="page">
+    {% for m in messages %}<div class="toast {{ m.tags }}">{{ m }}</div>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+{% endwith %}
+{% else %}{% block guest %}{% endblock %}{% endif %}
+<script>
+const $ = id => document.getElementById(id);
+$('menu') && ($('menu').onclick = () => $('side').classList.toggle('open'));
+$('theme') && ($('theme').onclick = () => {
+  const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t; localStorage.setItem('theme', t);
+});
+if ($('clock')) { const tick = () => $('clock').textContent = new Date().toLocaleString([], {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}); tick(); setInterval(tick, 30000); }
+</script>
+</body>
+</html>

@@ -1,0 +1,611 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HROS &mdash; The Modern Human Resources &amp; Attendance Operating System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
+<script>document.documentElement.dataset.theme = localStorage.getItem('theme') || 'light';</script>
+</head>
+<body class="home-body">
+
+<!-- Navigation -->
+<header class="home-nav">
+  <div class="home-nav-inner">
+    <a href="{% url 'home' %}" class="hros-brand-link">
+      <svg class="hros-logo-icon" width="38" height="38" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hrosGradNav" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#0284c7" />
+            <stop offset="50%" stop-color="#0d9488" />
+            <stop offset="100%" stop-color="#10b981" />
+          </linearGradient>
+        </defs>
+        <rect width="40" height="40" rx="10" fill="url(#hrosGradNav)" />
+        <path d="M12 11V29" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M28 11V29" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+        <path d="M12 20H28" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+        <circle cx="20" cy="20" r="3.5" fill="#ffffff"/>
+        <circle cx="20" cy="20" r="1.5" fill="#0d9488"/>
+        <circle cx="29" cy="11" r="2.2" fill="#a7f3d0"/>
+      </svg>
+      <div class="hros-brand-text">
+        <span class="hros-title">HROS</span>
+        <span class="hros-badge">v2.5</span>
+      </div>
+    </a>
+
+    <nav class="home-nav-links">
+      <a href="#features">Features</a>
+      <a href="#preview">Preview</a>
+      <a href="#calculator">Payroll Engine</a>
+      <a href="#workflow">Workflow</a>
+      <a href="#demo">Demo Access</a>
+    </nav>
+
+    <div class="home-nav-actions">
+      <button class="icon theme-toggle-btn" id="homeThemeToggle" aria-label="Toggle theme">◐</button>
+      {% if user.is_authenticated %}
+        <span class="home-user-pill">
+          <span class="user-avatar">{{ user.username|first|upper }}</span>
+          <span class="user-name">{{ user.username }}</span>
+        </span>
+        <a href="{% url 'dashboard' %}" class="btn hros-primary-btn">Go to Dashboard →</a>
+      {% else %}
+        <a href="{% url 'login' %}" class="btn ghost sm">Sign In</a>
+        <a href="{% url 'login' %}" class="btn hros-primary-btn">Launch Workspace →</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
+<!-- Hero Section -->
+<section class="home-hero">
+  <div class="home-hero-glow"></div>
+  <div class="home-container">
+    
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      <span>HROS Human Resources Operating System • Precision Attendance & Payroll</span>
+    </div>
+
+    <h1 class="hero-headline">
+      Smart Attendance.<br>
+      Automated Payroll.<br>
+      <span class="hero-gradient-text">Zero Compromise.</span>
+    </h1>
+
+    <p class="hero-subtext">
+      The all-in-one workforce operating system built for modern teams. Streamline daily 1-click check-ins, auto-calculate Loss of Pay (LOP) deductions, and generate print-ready salary slips in seconds.
+    </p>
+
+    <div class="hero-cta-group">
+      {% if user.is_authenticated %}
+        <a href="{% url 'dashboard' %}" class="btn hros-cta-btn">
+          <span>Enter Dashboard</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="{% url 'attendance_today' %}" class="btn ghost hros-cta-ghost">Today's Attendance Punch</a>
+      {% else %}
+        <a href="{% url 'login' %}" class="btn hros-cta-btn">
+          <span>Get Started / Sign In</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+        <a href="#demo" class="btn ghost hros-cta-ghost">Demo Credentials (admin)</a>
+      {% endif %}
+    </div>
+
+    <div class="hero-trust-chips">
+      <span><svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Zero Cloud Dependencies</span>
+      <span><svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Precision Calendar Math</span>
+      <span><svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Print-to-PDF Salary Slips</span>
+      <span><svg width="15" height="15" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg> Built on Django & SQLite</span>
+    </div>
+
+  </div>
+</section>
+
+<!-- Interactive Product Preview Mockup -->
+<section class="home-preview-section" id="preview">
+  <div class="home-container">
+    
+    <div class="preview-browser-frame">
+      <div class="browser-header">
+        <div class="browser-dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <div class="browser-address-bar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>https://hros.workspace.internal/console/dashboard</span>
+        </div>
+        <div class="browser-status">
+          <span class="pulse-indicator"></span> Live Session
+        </div>
+      </div>
+
+      <div class="browser-content">
+        
+        <!-- Top Stats Row -->
+        <div class="mockup-kpis">
+          <div class="mock-kpi-card">
+            <span class="mock-label">Active Employees</span>
+            <div class="mock-val">{{ total_employees|default:"5" }}</div>
+            <span class="mock-sub">All departments</span>
+          </div>
+          <div class="mock-kpi-card ok">
+            <span class="mock-label">Present Today</span>
+            <div class="mock-val">{{ present_count|default:"4" }}</div>
+            <span class="mock-sub">Verified check-ins</span>
+          </div>
+          <div class="mock-kpi-card bad">
+            <span class="mock-label">Absent / Leave</span>
+            <div class="mock-val">{{ absent_count|default:"1" }}</div>
+            <span class="mock-sub">Loss of pay tracked</span>
+          </div>
+          <div class="mock-kpi-card navy">
+            <span class="mock-label">{{ month_name }} Net Payroll</span>
+            <div class="mock-val">₹{{ payroll_total|floatformat:0|default:"2,45,000" }}</div>
+            <span class="mock-sub">Auto-computed</span>
+          </div>
+        </div>
+
+        <!-- Two Column Live Panels inside Mockup -->
+        <div class="mockup-grid">
+          <!-- Left: Attendance Status Feed -->
+          <div class="mock-panel">
+            <div class="mock-panel-head">
+              <h3>Today's Attendance Feed</h3>
+              <span class="mock-tag">{{ today|date:"D, j M Y" }}</span>
+            </div>
+            <div class="mock-table-wrap">
+              <table class="mock-table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Designation</th>
+                    <th>Check In</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% if recent_checkins %}
+                    {% for rec in recent_checkins %}
+                      <tr>
+                        <td><b>{{ rec.emp.name }}</b></td>
+                        <td>{{ rec.emp.designation }}</td>
+                        <td>{{ rec.check_in|time:"H:i"|default:"09:15" }}</td>
+                        <td><span class="tag {{ rec.status }}">{{ rec.get_status_display }}</span></td>
+                      </tr>
+                    {% endfor %}
+                  {% else %}
+                    <tr>
+                      <td><b>Asha Verma</b></td>
+                      <td>Accountant</td>
+                      <td>09:05 AM</td>
+                      <td><span class="tag P">Present</span></td>
+                    </tr>
+                    <tr>
+                      <td><b>Ravi Kumar</b></td>
+                      <td>Lead Developer</td>
+                      <td>09:12 AM</td>
+                      <td><span class="tag P">Present</span></td>
+                    </tr>
+                    <tr>
+                      <td><b>Meena Rao</b></td>
+                      <td>HR Executive</td>
+                      <td>-</td>
+                      <td><span class="tag L">Leave</span></td>
+                    </tr>
+                    <tr>
+                      <td><b>Suresh Babu</b></td>
+                      <td>Product Designer</td>
+                      <td>09:30 AM</td>
+                      <td><span class="tag H">Half Day</span></td>
+                    </tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Right: Real-time Salary Proration Simulation Card -->
+          <div class="mock-panel">
+            <div class="mock-panel-head">
+              <h3>Deduction Engine Architecture</h3>
+              <span class="mock-badge-tech">Formula-Driven</span>
+            </div>
+            
+            <div class="formula-breakdown-card">
+              <div class="formula-row">
+                <span class="f-label">Sample Employee</span>
+                <span class="f-val">Ravi Kumar (₹55,000 / mo)</span>
+              </div>
+              <div class="formula-row">
+                <span class="f-label">Days in Month</span>
+                <span class="f-val">31 Days (October)</span>
+              </div>
+              <div class="formula-row">
+                <span class="f-label">Per-Day Rate</span>
+                <span class="f-val">₹55,000 ÷ 31 = <b>₹1,774.19</b></span>
+              </div>
+              <div class="formula-row">
+                <span class="f-label">Attendance Record</span>
+                <span class="f-val text-warn">1 Absent + 1 Half-Day = 1.5 Days LOP</span>
+              </div>
+              <div class="formula-divider"></div>
+              <div class="formula-row deduction">
+                <span class="f-label">Loss of Pay Deduction</span>
+                <span class="f-val text-bad">- ₹2,661.29</span>
+              </div>
+              <div class="formula-row net-row">
+                <span class="f-label">Net Disbursed Pay</span>
+                <span class="f-val net-val">₹52,338.71</span>
+              </div>
+            </div>
+
+            <div class="mock-footer-bar">
+              <span>✓ Generated instant PDF pay slip</span>
+              <a href="{% if user.is_authenticated %}{% url 'payroll' %}{% else %}{% url 'login' %}{% endif %}" class="mock-link">Open Salary Register →</a>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- KPI Metrics Ribbon -->
+<section class="home-metrics-ribbon">
+  <div class="home-container">
+    <div class="ribbon-grid">
+      <div class="ribbon-item">
+        <div class="ribbon-num">{{ total_employees|default:"5+" }}</div>
+        <div class="ribbon-label">Employees Managed</div>
+      </div>
+      <div class="ribbon-item">
+        <div class="ribbon-num">100%</div>
+        <div class="ribbon-label">Automated Deductions</div>
+      </div>
+      <div class="ribbon-item">
+        <div class="ribbon-num">1-Click</div>
+        <div class="ribbon-label">Monthly Payroll Run</div>
+      </div>
+      <div class="ribbon-item">
+        <div class="ribbon-num">&lt; 1s</div>
+        <div class="ribbon-label">Print-Ready PDF Generation</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Core Features Bento Grid -->
+<section class="home-features-section" id="features">
+  <div class="home-container">
+    <div class="section-badge">Capabilities</div>
+    <h2 class="section-title">Engineered for Seamless HR Management</h2>
+    <p class="section-desc">Everything needed to operate daily attendance and disburse monthly payroll with absolute precision.</p>
+
+    <div class="bento-grid">
+      
+      <!-- Feature 1 -->
+      <div class="bento-card bento-wide">
+        <div class="bento-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3>One-Tap Daily Attendance</h3>
+        <p>Register morning check-ins and evening check-outs with a single click. Seamlessly tag Present, Half-Day, Approved Paid Leave, or Unexcused Absence. Total working hours compute automatically.</p>
+        <div class="feature-tags">
+          <span>• 1-Click Punch</span>
+          <span>• Precise Timestamps</span>
+          <span>• Status Classifications</span>
+        </div>
+      </div>
+
+      <!-- Feature 2 -->
+      <div class="bento-card">
+        <div class="bento-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <h3>Automated Loss of Pay (LOP)</h3>
+        <p>Formula-driven daily rate calculation prorated by the exact days of the current calendar month. Half-days auto-deduct 0.5 day's wage while preserving approved paid leaves.</p>
+      </div>
+
+      <!-- Feature 3 -->
+      <div class="bento-card">
+        <div class="bento-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h3>Printable PDF Salary Slips</h3>
+        <p>Generate formal employee salary slips with corporate headers, itemized gross pay, deduction breakdown, and net salary. Formatted for instant browser print and PDF archiving.</p>
+      </div>
+
+      <!-- Feature 4 -->
+      <div class="bento-card">
+        <div class="bento-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <h3>Staff Directory & Roles</h3>
+        <p>Full employee management: names, designations, basic salaries, contact details, join dates, and active/inactive toggles with instant search and status filtering.</p>
+      </div>
+
+      <!-- Feature 5 -->
+      <div class="bento-card bento-wide">
+        <div class="bento-icon-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        </div>
+        <h3>Audit-Grade Monthly Reports</h3>
+        <p>Aggregated SQL GROUP-BY reporting that compiles Present, Half-Day, Leave, and Absent tallies across the whole team. Perfect for monthly accounting audits and management reviews.</p>
+        <div class="feature-tags">
+          <span>• Monthly Summaries</span>
+          <span>• Print-Ready Layout</span>
+          <span>• Total Expense Rollup</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- Interactive Live Payroll Calculator -->
+<section class="home-calc-section" id="calculator">
+  <div class="home-container">
+    <div class="section-badge">Interactive Engine</div>
+    <h2 class="section-title">Test the HROS Payroll Calculation</h2>
+    <p class="section-desc">Experience how HROS computes exact prorated wages in real-time according to mathematical business rules.</p>
+
+    <div class="calc-card">
+      <div class="calc-inputs">
+        <div class="calc-field">
+          <label for="calcBasic">Basic Monthly Salary (₹)</label>
+          <input type="number" id="calcBasic" value="50000" step="1000" min="0">
+        </div>
+        <div class="calc-field">
+          <label for="calcDays">Days in Month</label>
+          <select id="calcDays">
+            <option value="31" selected>31 Days (Jan, Mar, May, Jul, Aug, Oct, Dec)</option>
+            <option value="30">30 Days (Apr, Jun, Sep, Nov)</option>
+            <option value="28">28 Days (February)</option>
+            <option value="29">29 Days (Leap Year February)</option>
+          </select>
+        </div>
+        <div class="calc-field">
+          <label for="calcAbsent">Full Days Absent</label>
+          <input type="number" id="calcAbsent" value="1" min="0" max="31">
+        </div>
+        <div class="calc-field">
+          <label for="calcHalf">Half Days Worked</label>
+          <input type="number" id="calcHalf" value="1" min="0" max="31">
+        </div>
+      </div>
+
+      <div class="calc-output">
+        <div class="calc-math-grid">
+          <div class="math-item">
+            <span class="math-label">Daily Wage Rate</span>
+            <span class="math-val" id="outPerDay">₹1,612.90</span>
+            <span class="math-formula">Basic ÷ Days in Month</span>
+          </div>
+          <div class="math-item">
+            <span class="math-label">Effective Absent Days</span>
+            <span class="math-val" id="outAbsentDays">1.50</span>
+            <span class="math-formula">Absent + (Half ÷ 2)</span>
+          </div>
+          <div class="math-item bad">
+            <span class="math-label">Total Deduction</span>
+            <span class="math-val" id="outDeduction">- ₹2,419.35</span>
+            <span class="math-formula">Effective Days × Daily Rate</span>
+          </div>
+          <div class="math-item net">
+            <span class="math-label">Final Net Pay</span>
+            <span class="math-val" id="outNet">₹47,580.65</span>
+            <span class="math-formula">Basic - Deduction</span>
+          </div>
+        </div>
+        <div class="calc-note">
+          <span>ℹ️ Note: Approved paid leaves (<b>Leave / L</b>) are completely non-penalized under HROS rules.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3-Step Workflow -->
+<section class="home-workflow-section" id="workflow">
+  <div class="home-container">
+    <div class="section-badge">How It Works</div>
+    <h2 class="section-title">The Three-Step Lifecycle</h2>
+    <p class="section-desc">From the morning punch to the month-end salary slip, HROS automates the entire HR workflow.</p>
+
+    <div class="workflow-steps">
+      <div class="step-card">
+        <div class="step-num">01</div>
+        <h3>Daily Punch Logging</h3>
+        <p>Employees check in and out, or the HR administrator rapidly assigns daily status (Present, Half Day, Leave, Absent) with 1 click.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">02</div>
+        <h3>Continuous Aggregation</h3>
+        <p>HROS continuously aggregates attendance logs, monitors hours worked, and tabulates absent days with zero manual arithmetic.</p>
+      </div>
+      <div class="step-card">
+        <div class="step-num">03</div>
+        <h3>One-Click Payroll & PDF Slips</h3>
+        <p>Review the monthly summary, generate the official payroll register, and print or export individual salary slips as PDF files.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Demo Credentials Sandbox -->
+<section class="home-demo-section" id="demo">
+  <div class="home-container">
+    <div class="demo-card">
+      <div class="demo-left">
+        <div class="section-badge">Instant Sandbox</div>
+        <h2>Test HROS with Live Sample Data</h2>
+        <p>The system is pre-configured with a complete administrative account and sample staff profiles ready for immediate demonstration.</p>
+        
+        <div class="credentials-box" style="flex-direction: column; gap: 1rem;">
+          <div style="display: flex; gap: 2rem;">
+            <div class="cred-item">
+              <span class="cred-label">HR Admin:</span>
+              <code class="cred-value">admin</code>
+            </div>
+            <div class="cred-item">
+              <span class="cred-label">Password:</span>
+              <code class="cred-value">admin123</code>
+            </div>
+          </div>
+          <div style="display: flex; gap: 2rem; border-top: 1px dashed var(--line); padding-top: .75rem;">
+            <div class="cred-item">
+              <span class="cred-label">Employee Login:</span>
+              <code class="cred-value" style="font-size: 1.05rem;">aarav.sharma</code>
+            </div>
+            <div class="cred-item">
+              <span class="cred-label">Password:</span>
+              <code class="cred-value" style="font-size: 1.05rem;">emp123</code>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-actions">
+          {% if user.is_authenticated %}
+            <a href="{% url 'dashboard' %}" class="btn hros-primary-btn">You're Signed In — Launch Dashboard →</a>
+          {% else %}
+            <a href="{% url 'login' %}" class="btn hros-primary-btn">Sign In with Demo Credentials →</a>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="demo-right">
+        <div class="demo-features-list">
+          <div class="df-item">
+            <div class="df-check">✓</div>
+            <div>
+              <b>10 Pre-loaded Employee Accounts</b>
+              <p>Individual logins for daily check-in/out and self-service portal.</p>
+            </div>
+          </div>
+          <div class="df-item">
+            <div class="df-check">✓</div>
+            <div>
+              <b>Indian Government Holidays 🇮🇳</b>
+              <p>Official 2026 Gazetted & Restricted Public Holiday schedule built in.</p>
+            </div>
+          </div>
+          <div class="df-item">
+            <div class="df-check">✓</div>
+            <div>
+              <b>1 Sick Leave / Mo & Leave Application</b>
+              <p>Strict 1-day/month quota enforcement with automated HR approval flow.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="home-footer">
+  <div class="home-container">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <div class="hros-brand-link">
+          <svg class="hros-logo-icon" width="34" height="34" viewBox="0 0 40 40" fill="none">
+            <defs>
+              <linearGradient id="hrosGradFoot" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#0284c7" />
+                <stop offset="100%" stop-color="#10b981" />
+              </linearGradient>
+            </defs>
+            <rect width="40" height="40" rx="10" fill="url(#hrosGradFoot)" />
+            <path d="M12 11V29M28 11V29M12 20H28" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+            <circle cx="20" cy="20" r="3.5" fill="#ffffff"/>
+          </svg>
+          <div class="hros-brand-text">
+            <span class="hros-title">HROS</span>
+            <span class="hros-badge">v2.5</span>
+          </div>
+        </div>
+        <p class="footer-tagline">Human Resources Operating System. Daily attendance and automated monthly payroll simplified.</p>
+      </div>
+
+      <div class="footer-links-group">
+        <h4>System Modules</h4>
+        <a href="{% if user.is_authenticated %}{% url 'dashboard' %}{% else %}{% url 'login' %}{% endif %}">Dashboard</a>
+        <a href="{% if user.is_authenticated %}{% url 'employee_list' %}{% else %}{% url 'login' %}{% endif %}">Employees</a>
+        <a href="{% if user.is_authenticated %}{% url 'attendance_today' %}{% else %}{% url 'login' %}{% endif %}">Today's Punch</a>
+        <a href="{% if user.is_authenticated %}{% url 'report' %}{% else %}{% url 'login' %}{% endif %}">Monthly Reports</a>
+        <a href="{% if user.is_authenticated %}{% url 'payroll' %}{% else %}{% url 'login' %}{% endif %}">Salary Register</a>
+      </div>
+
+      <div class="footer-links-group">
+        <h4>Architecture</h4>
+        <span>Python &amp; Django</span>
+        <span>SQLite &amp; SQL Schema</span>
+        <span>Vanilla CSS &amp; HTML5</span>
+        <span>Native Browser PDF Print</span>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <p>© 2026 HROS (Human Resources Operating System). All rights reserved.</p>
+      <div class="footer-tech-pill">
+        <span>● Django 5.x</span>
+        <span>● Standalone SQL Compliant</span>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<!-- Interactive Scripts -->
+<script>
+  // Theme Toggle for Landing Page
+  const homeThemeBtn = document.getElementById('homeThemeToggle');
+  if (homeThemeBtn) {
+    homeThemeBtn.onclick = () => {
+      const current = document.documentElement.dataset.theme;
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = next;
+      localStorage.setItem('theme', next);
+    };
+  }
+
+  // Interactive Live Payroll Calculator
+  function updateCalc() {
+    const basic = parseFloat(document.getElementById('calcBasic').value) || 0;
+    const days = parseInt(document.getElementById('calcDays').value) || 31;
+    const absent = parseFloat(document.getElementById('calcAbsent').value) || 0;
+    const half = parseFloat(document.getElementById('calcHalf').value) || 0;
+
+    const perDay = days > 0 ? (basic / days) : 0;
+    const absentDays = absent + (half / 2.0);
+    const deduction = Math.min(basic, absentDays * perDay);
+    const net = Math.max(0, basic - deduction);
+
+    document.getElementById('outPerDay').textContent = '₹' + perDay.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('outAbsentDays').textContent = absentDays.toFixed(2);
+    document.getElementById('outDeduction').textContent = '- ₹' + deduction.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    document.getElementById('outNet').textContent = '₹' + net.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  }
+
+  ['calcBasic', 'calcDays', 'calcAbsent', 'calcHalf'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', updateCalc);
+      el.addEventListener('change', updateCalc);
+    }
+  });
+
+  updateCalc();
+</script>
+
+</body>
+</html>
