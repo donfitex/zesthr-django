@@ -2,7 +2,7 @@
 {% block title %}Salary register{% endblock %}
 {% block content %}
 <div class="head"><h1>Salary register: {{ month_name }} {{ year }}</h1>
-  <form method="post">{% csrf_token %}<button class="btn">{% if slips %}Recalculate payroll{% else %}Generate payroll{% endif %}</button></form></div>
+  {% if perms.core.generate_payroll %}<form method="post">{% csrf_token %}<button class="btn">{% if slips %}Recalculate payroll{% else %}Generate payroll{% endif %}</button></form>{% endif %}</div>
 {% include "partials/period.html" %}
 <section class="card"><div class="scroll"><table>
   <tr><th>Employee</th><th>Gross</th><th>Absent days</th><th>Deduction</th><th>Net</th><th></th></tr>

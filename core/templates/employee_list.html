@@ -1,17 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Employees{% endblock %}
 {% block content %}
-<div class="head"><h1>Employees</h1><a class="btn" href="{% url 'employee_add' %}">Add employee</a></div>
+<div class="head"><h1>Employees</h1>{% if perms.core.add_employee %}<a class="btn" href="{% url 'employee_add' %}">Add employee</a>{% endif %}</div>
 <form method="get" class="filters">
   <input name="q" value="{{ q }}" placeholder="Search name or designation">
   <select name="status" onchange="this.form.submit()"><option value="">All</option><option value="active" {% if status == 'active' %}selected{% endif %}>Active</option><option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inactive</option></select>
   <button class="btn ghost sm">Search</button>
 </form>
 <section class="card"><div class="scroll"><table>
-  <tr><th>Name</th><th>Designation</th><th>Basic salary</th><th>Phone</th><th>Status</th><th></th></tr>
-  {% for e in employees %}<tr><td>{{ e.name }}</td><td>{{ e.designation }}</td><td>₹{{ e.basic_salary|floatformat:2 }}</td><td>{{ e.phone|default:"-" }}</td>
+  <tr><th>Name</th><th>Designation</th>{% if perms.core.view_employee_pay %}<th>Basic salary</th>{% endif %}<th>Phone</th><th>Status</th><th></th></tr>
+  {% for e in employees %}<tr><td>{{ e.name }}</td><td>{{ e.designation }}</td>{% if perms.core.view_employee_pay %}<td>₹{{ e.basic_salary|floatformat:2 }}</td>{% endif %}<td>{{ e.phone|default:"-" }}</td>
     <td><span class="tag {% if e.is_active %}P{% else %}A{% endif %}">{% if e.is_active %}Active{% else %}Inactive{% endif %}</span></td>
-    <td class="row-actions"><a href="{% url 'attendance_list' %}?emp={{ e.id }}">Attendance</a><a href="{% url 'employee_edit' e.pk %}">Edit</a><a class="danger" href="{% url 'employee_delete' e.pk %}">Delete</a></td></tr>
-  {% empty %}<tr><td colspan="6" class="empty">No employees found. <a href="{% url 'employee_add' %}">Add the first one.</a></td></tr>{% endfor %}
+    <td class="row-actions">{% if perms.core.view_all_attendance %}<a href="{% url 'attendance_list' %}?emp={{ e.id }}">Attendance</a>{% endif %}{% if perms.core.change_employee %}<a href="{% url 'employee_edit' e.pk %}">Edit</a>{% endif %}{% if perms.core.delete_employee %}<a class="danger" href="{% url 'employee_delete' e.pk %}">Delete</a>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="6" class="empty">No employees found.{% if perms.core.add_employee %} <a href="{% url 'employee_add' %}">Add the first one.</a>{% endif %}</td></tr>{% endfor %}
 </table></div></section>
 {% endblock %}

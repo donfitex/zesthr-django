@@ -38,33 +38,39 @@
   <nav>
     <a class="{% if n == 'home' %}on{% endif %}" href="{% url 'home' %}">Overview (Home)</a>
     <a class="{% if n == 'dashboard' %}on{% endif %}" href="{% url 'dashboard' %}">
-      {% if user.is_staff or user.is_superuser %}Dashboard{% else %}My Dashboard{% endif %}
+      {% if perms.core.view_all_attendance %}Dashboard{% else %}My Dashboard{% endif %}
     </a>
 
-    {% if user.is_staff or user.is_superuser %}
+    {% if perms.core.view_all_attendance %}
+    {% if perms.core.view_employee %}
     <details {% if 'employee' in n %}open{% endif %}><summary>Employees</summary>
       <a class="{% if n == 'employee_list' %}on{% endif %}" href="{% url 'employee_list' %}">All employees</a>
-      <a class="{% if n == 'employee_add' %}on{% endif %}" href="{% url 'employee_add' %}">Add employee</a>
+      {% if perms.core.add_employee %}<a class="{% if n == 'employee_add' %}on{% endif %}" href="{% url 'employee_add' %}">Add employee</a>{% endif %}
     </details>
+    {% endif %}
     <details {% if 'attendance' in n %}open{% endif %}><summary>Attendance</summary>
-      <a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Today: check-in / out</a>
+      {% if perms.core.mark_attendance %}<a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Today: check-in / out</a>{% endif %}
       <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">Attendance log</a>
-      <a class="{% if n == 'attendance_add' %}on{% endif %}" href="{% url 'attendance_add' %}">Add manual entry</a>
+      {% if perms.core.add_attendance %}<a class="{% if n == 'attendance_add' %}on{% endif %}" href="{% url 'attendance_add' %}">Add manual entry</a>{% endif %}
     </details>
+    {% if perms.core.view_all_leaves %}
     <details {% if 'leave' in n %}open{% endif %}><summary>Leaves</summary>
       <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">Leave requests</a>
-      <a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply leave</a>
+      {% if user.employee_profile %}<a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply leave</a>{% endif %}
     </details>
+    {% endif %}
+    {% if perms.core.view_payroll_report %}
     <details {% if n == 'report' %}open{% endif %}><summary>Reports</summary>
       <a class="{% if n == 'report' %}on{% endif %}" href="{% url 'report' %}">Monthly attendance report</a>
     </details>
     <details {% if n == 'payroll' or n == 'slip' %}open{% endif %}><summary>Payroll</summary>
       <a class="{% if n == 'payroll' %}on{% endif %}" href="{% url 'payroll' %}">Salary register</a>
     </details>
+    {% endif %}
     <a class="{% if n == 'holidays' %}on{% endif %}" href="{% url 'holidays' %}">Govt Holidays 🇮🇳</a>
-    <a href="/admin/">Admin panel</a>
+    {% if user.is_staff %}<a href="/admin/">Admin panel</a>{% endif %}
 
-    {% else %}
+    {% elif user.employee_profile %}
     <a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Punch Attendance</a>
     <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">My Attendance Log</a>
     <details {% if 'leave' in n %}open{% endif %}><summary>Leaves</summary>
@@ -72,6 +78,8 @@
       <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">My Leave Requests</a>
     </details>
     <a class="{% if n == 'holidays' %}on{% endif %}" href="{% url 'holidays' %}">Govt Holidays 🇮🇳</a>
+    {% elif user.is_staff %}
+    <a href="/admin/">Admin panel</a>
     {% endif %}
   </nav>
 </aside>
@@ -84,8 +92,8 @@
     <span class="who">
       {% if user.employee_profile %}
         {{ user.employee_profile.name }} <span class="hros-badge">EMP</span>
-      {% elif user.is_staff or user.is_superuser %}
-        {{ user.username }} <span class="hros-badge">HR ADMIN</span>
+      {% elif perms.core.view_all_attendance %}
+        {{ user.username }} <span class="hros-badge">STAFF</span>
       {% else %}
         {{ user.username }}
       {% endif %}

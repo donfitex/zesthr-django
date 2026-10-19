@@ -12,6 +12,12 @@ class EmployeeForm(forms.ModelForm):
         fields = ["name", "designation", "basic_salary", "email", "phone", "joined_on", "is_active"]
         widgets = {"joined_on": D}
 
+    def __init__(self, *args, can_edit_pay=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not can_edit_pay:
+            # Removed from the form entirely, so a crafted POST cannot set it either.
+            del self.fields["basic_salary"]
+
 
 class AttendanceForm(forms.ModelForm):
     class Meta:

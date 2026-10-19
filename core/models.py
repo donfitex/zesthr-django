@@ -18,6 +18,10 @@ class Employee(models.Model):
     class Meta:
         db_table = "employee"
         ordering = ["name"]
+        permissions = [
+            ("view_employee_pay", "Can view employee pay details"),
+            ("change_employee_pay", "Can change employee pay details"),
+        ]
 
     def __str__(self):
         return self.name
@@ -49,6 +53,10 @@ class Attendance(models.Model):
         db_table = "attendance"
         unique_together = ("emp", "date")
         ordering = ["-date", "emp__name"]
+        permissions = [
+            ("view_all_attendance", "Can view attendance of all employees"),
+            ("mark_attendance", "Can mark attendance on behalf of employees"),
+        ]
 
     @property
     def hours(self):
@@ -74,6 +82,11 @@ class Salary(models.Model):
         db_table = "salary"
         unique_together = ("emp", "month", "year")
         ordering = ["-year", "-month", "emp__name"]
+        permissions = [
+            ("generate_payroll", "Can generate payroll"),
+            ("view_all_payslips", "Can view payslips of all employees"),
+            ("view_payroll_report", "Can view payroll and salary reports"),
+        ]
 
 
 class Holiday(models.Model):
@@ -115,6 +128,10 @@ class LeaveApplication(models.Model):
     class Meta:
         db_table = "leave_application"
         ordering = ["-applied_on"]
+        permissions = [
+            ("view_all_leaves", "Can view leave applications of all employees"),
+            ("approve_leave", "Can approve or reject leave applications"),
+        ]
 
     @property
     def days_count(self):

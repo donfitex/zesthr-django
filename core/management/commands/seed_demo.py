@@ -1,16 +1,23 @@
 import random
 from datetime import date, time, timedelta
 
-from django.contrib.auth.models import User
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.contrib.auth.models import Group, User
+from django.core.management.base import BaseCommand, CommandError
 
+from core import roles
 from core.models import Attendance, Employee, Holiday, LeaveApplication
+from core.roles import sync_roles
 
 
 class Command(BaseCommand):
     help = "Seed admin user, 10 dummy employees with logins (emp123), Indian Govt holidays, leaves, and attendance."
 
     def handle(self, *args, **opts):
+        if not settings.DEBUG:
+            raise CommandError("seed_demo creates accounts with well-known passwords; it only runs when DEBUG is True.")
+        sync_roles()
+
         # 1. Admin Superuser
         admin_user, _ = User.objects.get_or_create(
             username="admin",
@@ -18,7 +25,17 @@ class Command(BaseCommand):
         )
         admin_user.set_password("admin123")
         admin_user.save()
+        admin_user.groups.add(Group.objects.get(name=roles.HR_ADMIN))
         self.stdout.write(self.style.SUCCESS("[OK] Admin user created / updated: admin / admin123"))
+
+        # Demo accounts for the other staff roles (no employee profile).
+        for uname, role in (("hr.officer", roles.HR_OFFICER), ("payroll.officer", roles.PAYROLL_OFFICER)):
+            su, _ = User.objects.get_or_create(username=uname, defaults={"email": f"{uname}@hros.local"})
+            su.set_password("staff123")
+            su.is_staff = su.is_superuser = False
+            su.save()
+            su.groups.set([Group.objects.get(name=role)])
+            self.stdout.write(self.style.SUCCESS(f"[OK] {role} demo account: {uname} / staff123"))
 
         # 2. 10 Dummy Employees with User Logins
         employees_data = [
@@ -46,6 +63,7 @@ class Command(BaseCommand):
             u.is_staff = False
             u.is_superuser = False
             u.save()
+            u.groups.set([Group.objects.get(name=roles.EMPLOYEE)])
 
             # Create or update Employee profile linked to user
             emp, _ = Employee.objects.get_or_create(

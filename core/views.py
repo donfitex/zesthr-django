@@ -5,6 +5,7 @@ from decimal import Decimal
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
@@ -13,7 +14,9 @@ from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from .forms import AttendanceForm, EmployeeForm, LeaveApplicationForm
+from . import roles
 from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
+from .permissions import PermissionRequiredMixin, get_employee_profile, permission_required, require_perm
 
 CENT = Decimal("0.01")
 
@@ -56,36 +59,34 @@ def summary(month, year):
 
 
 def home(request):
+    """Public landing page. Live company data is shown only to authorized users;
+    everyone else sees the template's sample figures."""
     today = timezone.localdate()
-    total = Employee.objects.filter(is_active=True).count()
-    recs = Attendance.objects.filter(date=today, emp__is_active=True)
-    present_count = recs.filter(status__in=["P", "H"]).count()
-    absent_count = recs.filter(status="A").count()
-    leave_count = recs.filter(status="L").count()
-    payroll_total = Salary.objects.filter(month=today.month, year=today.year).aggregate(t=Sum("net"))["t"] or 0
-    recent_checkins = recs.select_related("emp")[:5]
-    return render(request, "home.html", {
-        "today": today,
-        "total_employees": total,
-        "present_count": present_count,
-        "absent_count": absent_count,
-        "leave_count": leave_count,
-        "unmarked_count": max(0, total - recs.count()),
-        "payroll_total": payroll_total,
-        "recent_checkins": recent_checkins,
-        "month_name": calendar.month_name[today.month],
-        "year": today.year,
-    })
+    ctx = {"today": today, "month_name": calendar.month_name[today.month], "year": today.year}
+    if request.user.has_perm(roles.VIEW_ALL_ATTENDANCE):
+        total = Employee.objects.filter(is_active=True).count()
+        recs = Attendance.objects.filter(date=today, emp__is_active=True)
+        ctx.update(
+            total_employees=total,
+            present_count=recs.filter(status__in=["P", "H"]).count(),
+            absent_count=recs.filter(status="A").count(),
+            leave_count=recs.filter(status="L").count(),
+            unmarked_count=max(0, total - recs.count()),
+            recent_checkins=recs.select_related("emp")[:5],
+        )
+    if request.user.has_perm(roles.VIEW_PAYROLL_REPORT):
+        ctx["payroll_total"] = Salary.objects.filter(month=today.month, year=today.year).aggregate(t=Sum("net"))["t"] or 0
+    return render(request, "home.html", ctx)
 
 
 @login_required
 def dashboard(request):
     today = timezone.localdate()
-    is_staff = request.user.is_staff or request.user.is_superuser
-    emp_profile = getattr(request.user, "employee_profile", None)
+    emp_profile = get_employee_profile(request.user)
+    can_see_company = request.user.has_perm(roles.VIEW_ALL_ATTENDANCE)
 
     # Employee Portal
-    if not is_staff and emp_profile:
+    if not can_see_company and emp_profile:
         rec = Attendance.objects.filter(emp=emp_profile, date=today).first()
         recent = Attendance.objects.filter(emp=emp_profile).order_by("-date")[:10]
         leaves = LeaveApplication.objects.filter(emp=emp_profile).order_by("-applied_on")[:5]
@@ -107,20 +108,24 @@ def dashboard(request):
         }
         return render(request, "employee_dashboard.html", ctx)
 
-    # Administrator / HR Manager Portal
+    # Administrator / HR / payroll portal
+    if not can_see_company:
+        raise PermissionDenied
     total = Employee.objects.filter(is_active=True).count()
     recs = Attendance.objects.filter(date=today, emp__is_active=True)
-    pending_leaves = LeaveApplication.objects.filter(status="PENDING").count()
     ctx = {
         "total": total,
         "present": recs.filter(status__in=["P", "H"]).count(),
         "absent": recs.filter(status="A").count(),
         "leave": recs.filter(status="L").count(),
         "unmarked": max(0, total - recs.count()),
-        "pending_leaves": pending_leaves,
-        "payroll": Salary.objects.filter(month=today.month, year=today.year).aggregate(t=Sum("net"))["t"] or 0,
         "recent": recs.select_related("emp")[:8],
         "today": today,
+        # None means "not permitted": the template hides the tile.
+        "pending_leaves": (LeaveApplication.objects.filter(status="PENDING").count()
+                           if request.user.has_perm(roles.VIEW_ALL_LEAVES) else None),
+        "payroll": (Salary.objects.filter(month=today.month, year=today.year).aggregate(t=Sum("net"))["t"] or 0
+                    if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None),
     }
     return render(request, "dashboard.html", ctx)
 
@@ -136,7 +141,8 @@ class Base(LoginRequiredMixin, SuccessMessageMixin):
         return ctx
 
 
-class EmployeeList(LoginRequiredMixin, ListView):
+class EmployeeList(PermissionRequiredMixin, ListView):
+    permission_required = roles.VIEW_EMPLOYEE
     template_name = "employee_list.html"
     context_object_name = "employees"
 
@@ -155,17 +161,30 @@ class EmployeeList(LoginRequiredMixin, ListView):
         return ctx
 
 
-class EmployeeCreate(Base, CreateView):
+class EmployeeFormMixin:
+    """Users without pay-edit permission never see or change the salary field."""
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["can_edit_pay"] = self.request.user.has_perm(roles.CHANGE_EMPLOYEE_PAY)
+        return kwargs
+
+
+class EmployeeCreate(PermissionRequiredMixin, EmployeeFormMixin, Base, CreateView):
+    # Creating an employee requires a salary, so it also needs pay-edit rights.
+    permission_required = (roles.ADD_EMPLOYEE, roles.CHANGE_EMPLOYEE_PAY)
     model, form_class, title = Employee, EmployeeForm, "Add employee"
     success_url, success_message = reverse_lazy("employee_list"), "Employee added."
 
 
-class EmployeeUpdate(Base, UpdateView):
+class EmployeeUpdate(PermissionRequiredMixin, EmployeeFormMixin, Base, UpdateView):
+    permission_required = roles.CHANGE_EMPLOYEE
     model, form_class, title = Employee, EmployeeForm, "Edit employee"
     success_url, success_message = reverse_lazy("employee_list"), "Employee updated."
 
 
-class EmployeeDelete(Base, DeleteView):
+class EmployeeDelete(PermissionRequiredMixin, Base, DeleteView):
+    permission_required = roles.DELETE_EMPLOYEE
     model, title, template_name = Employee, "Delete employee", "confirm_delete.html"
     success_url, success_message = reverse_lazy("employee_list"), "Employee deleted."
 
@@ -174,21 +193,26 @@ class EmployeeDelete(Base, DeleteView):
 @login_required
 def attendance_today(request):
     today = timezone.localdate()
-    is_staff = request.user.is_staff or request.user.is_superuser
-    emp_profile = getattr(request.user, "employee_profile", None)
+    emp_profile = get_employee_profile(request.user)
+    can_mark_others = request.user.has_perm(roles.MARK_ATTENDANCE)
 
     if request.method == "POST":
-        if not is_staff and emp_profile:
-            emp = emp_profile
-        else:
-            emp_id = request.POST.get("emp_id")
-            emp = get_object_or_404(Employee, pk=emp_id) if emp_id else emp_profile
+        emp_id = request.POST.get("emp_id")
+        emp = get_object_or_404(Employee, pk=emp_id) if emp_id else emp_profile
 
         if not emp:
             messages.error(request, "Employee profile not found.")
             return redirect("attendance_today")
 
+        # Acting on someone else's attendance needs the explicit permission.
+        if not can_mark_others and (emp_profile is None or emp.pk != emp_profile.pk):
+            raise PermissionDenied
+
         action = request.POST.get("action")
+        # Employees may only punch in/out. Setting a status (absent, half day,
+        # leave) changes pay, so it is reserved for attendance managers.
+        if action in ("A", "H", "L") and not can_mark_others:
+            raise PermissionDenied
         now = timezone.localtime().time().replace(microsecond=0)
         rec, _ = Attendance.objects.get_or_create(emp=emp, date=today)
         if action == "check_in":
@@ -204,12 +228,14 @@ def attendance_today(request):
             messages.success(request, f"{emp.name}: status marked as {rec.get_status_display()}.")
         rec.save()
 
-        if not is_staff:
+        if not can_mark_others:
             return redirect("dashboard")
         return redirect("attendance_today")
 
-    if not is_staff and emp_profile:
-        return redirect("dashboard")
+    if not can_mark_others:
+        if emp_profile:
+            return redirect("dashboard")
+        raise PermissionDenied
 
     records = {a.emp_id: a for a in Attendance.objects.filter(date=today)}
     rows = [(e, records.get(e.id)) for e in Employee.objects.filter(is_active=True)]
@@ -217,44 +243,55 @@ def attendance_today(request):
 
 
 class AttendanceList(LoginRequiredMixin, ListView):
+    """Everyone sees their own log; only users with view_all_attendance see others."""
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and not (
+            request.user.has_perm(roles.VIEW_ALL_ATTENDANCE) or get_employee_profile(request.user)
+        ):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
     template_name = "attendance_list.html"
     context_object_name = "records"
 
     def get_queryset(self):
         p = period(self.request)
         qs = Attendance.objects.select_related("emp").filter(date__month=p["month"], date__year=p["year"])
-        is_staff = self.request.user.is_staff or self.request.user.is_superuser
-        emp_profile = getattr(self.request.user, "employee_profile", None)
-        if not is_staff and emp_profile:
-            return qs.filter(emp=emp_profile)
+        if not self.request.user.has_perm(roles.VIEW_ALL_ATTENDANCE):
+            return qs.filter(emp=get_employee_profile(self.request.user))
         emp = self.request.GET.get("emp")
         return qs.filter(emp_id=emp) if emp else qs
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
         ctx.update(period(self.request))
-        is_staff = self.request.user.is_staff or self.request.user.is_superuser
-        ctx.update(is_staff=is_staff, employees=Employee.objects.all(), emp=self.request.GET.get("emp", ""))
+        can_see_all = self.request.user.has_perm(roles.VIEW_ALL_ATTENDANCE)
+        ctx.update(is_staff=can_see_all, emp=self.request.GET.get("emp", ""),
+                   employees=Employee.objects.all() if can_see_all else Employee.objects.none())
         return ctx
 
 
-class AttendanceCreate(Base, CreateView):
+class AttendanceCreate(PermissionRequiredMixin, Base, CreateView):
+    permission_required = roles.ADD_ATTENDANCE
     model, form_class, title = Attendance, AttendanceForm, "Add attendance entry"
     success_url, success_message = reverse_lazy("attendance_list"), "Attendance saved."
 
 
-class AttendanceUpdate(Base, UpdateView):
+class AttendanceUpdate(PermissionRequiredMixin, Base, UpdateView):
+    permission_required = roles.CHANGE_ATTENDANCE
     model, form_class, title = Attendance, AttendanceForm, "Edit attendance entry"
     success_url, success_message = reverse_lazy("attendance_list"), "Attendance updated."
 
 
-class AttendanceDelete(Base, DeleteView):
+class AttendanceDelete(PermissionRequiredMixin, Base, DeleteView):
+    permission_required = roles.DELETE_ATTENDANCE
     model, title, template_name = Attendance, "Delete attendance entry", "confirm_delete.html"
     success_url, success_message = reverse_lazy("attendance_list"), "Entry deleted."
 
 
 # ---------- Reports & payroll ----------
-@login_required
+@permission_required(roles.VIEW_PAYROLL_REPORT)
 def monthly_report(request):
     p = period(request)
     rows = summary(p["month"], p["year"])
@@ -263,10 +300,11 @@ def monthly_report(request):
     return render(request, "report.html", p)
 
 
-@login_required
+@permission_required(roles.VIEW_PAYROLL_REPORT)
 def payroll(request):
     p = period(request)
     if request.method == "POST":
+        require_perm(request.user, roles.GENERATE_PAYROLL)
         for r in summary(p["month"], p["year"]):
             Salary.objects.update_or_create(
                 emp=r["emp"], month=p["month"], year=p["year"],
@@ -282,12 +320,13 @@ def payroll(request):
 
 @login_required
 def slip(request, pk):
-    is_staff = request.user.is_staff or request.user.is_superuser
-    emp_profile = getattr(request.user, "employee_profile", None)
-    if not is_staff and emp_profile:
-        s = get_object_or_404(Salary.objects.select_related("emp"), pk=pk, emp=emp_profile)
-    else:
-        s = get_object_or_404(Salary.objects.select_related("emp"), pk=pk)
+    emp_profile = get_employee_profile(request.user)
+    slips = Salary.objects.select_related("emp")
+    if not request.user.has_perm(roles.VIEW_ALL_PAYSLIPS):
+        if not emp_profile:
+            raise PermissionDenied
+        slips = slips.filter(emp=emp_profile)  # someone else's slip is a 404, not a hint it exists
+    s = get_object_or_404(slips, pk=pk)
     f = Q(date__month=s.month, date__year=s.year)
     counts = s.emp.attendance.aggregate(
         present=Count("id", filter=f & Q(status="P")), half=Count("id", filter=f & Q(status="H")),
@@ -313,10 +352,13 @@ def holidays_list(request):
 @login_required
 def leaves_list(request):
     today = timezone.localdate()
-    is_staff = request.user.is_staff or request.user.is_superuser
-    emp_profile = getattr(request.user, "employee_profile", None)
+    can_manage = request.user.has_perm(roles.VIEW_ALL_LEAVES)
+    emp_profile = get_employee_profile(request.user)
 
-    if not is_staff and emp_profile:
+    if not can_manage and not emp_profile:
+        raise PermissionDenied
+
+    if not can_manage:
         leaves = LeaveApplication.objects.filter(emp=emp_profile).order_by("-applied_on")
         sick_used = emp_profile.sick_leaves_used_this_month(today.month, today.year)
         sick_rem = emp_profile.sick_leaves_remaining(today.month, today.year)
@@ -378,11 +420,8 @@ def leave_apply(request):
     })
 
 
-@login_required
+@permission_required(roles.APPROVE_LEAVE)
 def leave_action(request, pk):
-    if not (request.user.is_staff or request.user.is_superuser):
-        messages.error(request, "Only HR administrators can approve or reject leaves.")
-        return redirect("leaves_list")
 
     leave = get_object_or_404(LeaveApplication.objects.select_related("emp"), pk=pk)
     if request.method == "POST":
