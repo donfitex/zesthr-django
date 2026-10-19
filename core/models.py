@@ -127,6 +127,10 @@ class Employee(models.Model):
     confirmation_date = models.DateField(null=True, blank=True, help_text="End of probation")
     separation_date = models.DateField(null=True, blank=True)
     separation_reason = models.CharField(max_length=255, blank=True)
+    # Personal details: visible to the employee and to HR only.
+    address = models.TextField(blank=True)
+    emergency_contact_name = models.CharField(max_length=100, blank=True)
+    emergency_contact_phone = models.CharField(max_length=20, blank=True)
 
     class Meta:
         db_table = "employee"
@@ -136,6 +140,7 @@ class Employee(models.Model):
             ("change_employee_pay", "Can change employee pay details"),
             ("link_employee_account", "Can link or unlink an employee's login account"),
             ("deactivate_employee", "Can deactivate and reactivate employees"),
+            ("view_employee_personal", "Can view employees' address and emergency contacts"),
         ]
         indexes = [models.Index(fields=["is_active", "department"], name="emp_active_dept_idx")]
         constraints = [
@@ -376,4 +381,33 @@ class SecurityEvent(models.Model):
     def save(self, *args, **kwargs):
         if not self._state.adding:
             raise ValidationError("Security events cannot be modified.")
+        super().save(*args, **kwargs)
+
+
+class EmploymentHistory(models.Model):
+    """Append-only record of changes to an employee's job details (who, when, from what to what).
+
+    Values are stored as text so the history stays readable after a department or position
+    is renamed. Pay changes are flagged `sensitive` and shown only to those who may see pay.
+    """
+
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="history")
+    field = models.CharField(max_length=30)
+    old_value = models.CharField(max_length=255, blank=True)
+    new_value = models.CharField(max_length=255, blank=True)
+    sensitive = models.BooleanField(default=False)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "employment_history"
+        ordering = ["-changed_at", "-id"]
+        indexes = [models.Index(fields=["employee", "changed_at"], name="emphist_emp_when_idx")]
+
+    def __str__(self):
+        return f"{self.employee_id}: {self.field} {self.old_value!r} -> {self.new_value!r}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError("Employment history cannot be modified.")
         super().save(*args, **kwargs)

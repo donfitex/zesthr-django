@@ -8,13 +8,14 @@ on the server regardless of what the UI shows.
 - Logged-in users who lack the permission get HTTP 403.
 """
 from functools import wraps
+from types import SimpleNamespace
 
 from django.contrib.auth.mixins import PermissionRequiredMixin  # noqa: F401  (re-exported)
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
 __all__ = ["PermissionRequiredMixin", "get_employee_profile", "permission_required",
-           "require_employee_profile", "require_perm"]
+           "require_employee_profile", "require_perm", "employee_access"]
 
 
 def permission_required(*perms):
@@ -39,6 +40,29 @@ def get_employee_profile(user):
     if not user.is_authenticated:
         return None
     return getattr(user, "employee_profile", None)
+
+
+def employee_access(user, employee):
+    """What `user` may see of `employee`'s profile. Four tiers, widest to narrowest:
+
+    basic       name, department, position, manager, work contact: the employee themself,
+                their direct manager, and anyone with the view_employee permission
+    employment  schedule, dates, history, login account: the employee and view_employee holders
+    personal    address, emergency contacts: the employee and view_employee_personal holders
+    pay         salary and pay history: the employee and view_employee_pay holders
+    """
+    from . import roles
+
+    profile = get_employee_profile(user)
+    is_self = profile is not None and profile.pk == employee.pk
+    is_manager = profile is not None and employee.manager_id == profile.pk  # direct reports only
+    sees_hr = user.has_perm(roles.VIEW_EMPLOYEE)
+    return SimpleNamespace(
+        can_view=is_self or is_manager or sees_hr, is_self=is_self, is_manager=is_manager,
+        employment=is_self or sees_hr,
+        personal=is_self or user.has_perm(roles.VIEW_EMPLOYEE_PERSONAL),
+        pay=is_self or user.has_perm(roles.VIEW_EMPLOYEE_PAY),
+    )
 
 
 def require_employee_profile(user, *, active=True):

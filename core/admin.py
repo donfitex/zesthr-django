@@ -27,6 +27,8 @@ class EmployeeAdmin(admin.ModelAdmin):
         u = request.user
         if not (u.has_perm(roles.VIEW_EMPLOYEE_PAY) or u.has_perm(roles.CHANGE_EMPLOYEE_PAY)):
             fields.remove("basic_salary")
+        if u.has_perm(roles.VIEW_EMPLOYEE_PERSONAL):
+            fields += ["address", "emergency_contact_name", "emergency_contact_phone"]
         return fields
 
     def get_readonly_fields(self, request, obj=None):

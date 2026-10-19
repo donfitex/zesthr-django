@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.db import transaction
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q, ProtectedError, Sum
 from django.http import Http404
@@ -14,12 +15,13 @@ from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from . import roles, selectors
-from .forms import AttendanceForm, DeactivateEmployeeForm, EmployeeForm, LeaveApplicationForm
-from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
-from .permissions import (PermissionRequiredMixin, get_employee_profile, permission_required,
+from .forms import AttendanceForm, DeactivateEmployeeForm, EmployeeForm, EmployeeSelfForm, LeaveApplicationForm
+from .models import Attendance, Department, Employee, Holiday, LeaveApplication, Salary
+from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
                           require_employee_profile, require_perm)
 from .services import attendance as attendance_service
 from .services import employees as employee_service
+from .services import history as history_service
 from .services import leave as leave_service
 from .services import payroll as payroll_service
 
@@ -92,20 +94,72 @@ class EmployeeList(PermissionRequiredMixin, ListView):
     permission_required = roles.VIEW_EMPLOYEE
     template_name = "employee_list.html"
     context_object_name = "employees"
+    paginate_by = 20
+
+    def filters(self):
+        g = self.request.GET
+        status = g.get("status", "")
+        valid = {"active", "inactive", *(code for code, _ in Employee.STATUS)}
+        department = g.get("department", "")
+        return {"q": g.get("q", "").strip(), "status": status if status in valid else "",
+                "department": department if department.isdigit() else ""}
 
     def get_queryset(self):
-        qs = Employee.objects.all()
-        q, status = self.request.GET.get("q", ""), self.request.GET.get("status", "")
-        if q:
-            qs = qs.filter(Q(name__icontains=q) | Q(designation__icontains=q))
-        if status in ("active", "inactive"):
-            qs = qs.filter(is_active=status == "active")
-        return qs
+        f = self.filters()
+        qs = Employee.objects.select_related("department", "position")
+        if f["q"]:
+            qs = qs.filter(Q(name__icontains=f["q"]) | Q(designation__icontains=f["q"])
+                           | Q(employee_number__icontains=f["q"]) | Q(email__icontains=f["q"])
+                           | Q(department__name__icontains=f["q"]) | Q(position__title__icontains=f["q"]))
+        if f["status"] in ("active", "inactive"):
+            qs = qs.filter(is_active=f["status"] == "active")
+        elif f["status"]:
+            qs = qs.filter(employment_status=f["status"])
+        if f["department"]:
+            qs = qs.filter(department_id=int(f["department"]))
+        return qs.order_by("name", "pk")
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
-        ctx.update(q=self.request.GET.get("q", ""), status=self.request.GET.get("status", ""))
+        ctx.update(self.filters(), departments=Department.objects.all(), statuses=Employee.STATUS,
+                   total_matches=ctx["paginator"].count)
         return ctx
+
+
+@login_required
+def employee_detail(request, pk):
+    emp = get_object_or_404(Employee.objects.select_related(
+        "department", "position", "employment_type", "work_location", "work_schedule", "manager", "user"), pk=pk)
+    access = employee_access(request.user, emp)
+    if not access.can_view:
+        raise Http404  # not "forbidden": do not even confirm that this employee exists
+    return render(request, "employee_detail.html", _profile_context(emp, access))
+
+
+def _profile_context(emp, access):
+    ctx = {"emp": emp, "access": access, "history": [], "reports": []}
+    if access.employment:
+        events = emp.history.select_related("changed_by")
+        ctx["history"] = [h for h in events if access.pay or not h.sensitive]
+        ctx["reports"] = emp.direct_reports.filter(is_active=True).select_related("position")
+    return ctx
+
+
+@login_required
+def my_profile(request):
+    emp = require_employee_profile(request.user, active=False)
+    return render(request, "employee_detail.html", _profile_context(emp, employee_access(request.user, emp)))
+
+
+@login_required
+def my_profile_edit(request):
+    emp = require_employee_profile(request.user)
+    form = EmployeeSelfForm(request.POST or None, instance=emp)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Your details were updated.")
+        return redirect("my_profile")
+    return render(request, "form.html", {"form": form, "title": "Edit my details"})
 
 
 class EmployeeFormMixin:
@@ -115,18 +169,32 @@ class EmployeeFormMixin:
         kwargs = super().get_form_kwargs()
         kwargs["can_edit_pay"] = self.request.user.has_perm(roles.CHANGE_EMPLOYEE_PAY)
         kwargs["can_link_account"] = self.request.user.has_perm(roles.LINK_EMPLOYEE_ACCOUNT)
+        kwargs["can_edit_personal"] = self.request.user.has_perm(roles.VIEW_EMPLOYEE_PERSONAL)
         return kwargs
 
 
 class EmployeeCreate(PermissionRequiredMixin, EmployeeFormMixin, Base, CreateView):
     # Creating an employee requires a salary, so it also needs pay-edit rights.
     permission_required = (roles.ADD_EMPLOYEE, roles.CHANGE_EMPLOYEE_PAY)
+
+    def form_valid(self, form):
+        with transaction.atomic():
+            response = super().form_valid(form)
+            history_service.record_created(self.object, self.request.user)
+        return response
     model, form_class, title = Employee, EmployeeForm, "Add employee"
     success_url, success_message = reverse_lazy("employee_list"), "Employee added."
 
 
 class EmployeeUpdate(PermissionRequiredMixin, EmployeeFormMixin, Base, UpdateView):
     permission_required = roles.CHANGE_EMPLOYEE
+
+    def form_valid(self, form):
+        before = history_service.refresh_and_snapshot(self.object.pk)  # DB values, before the save
+        with transaction.atomic():
+            response = super().form_valid(form)
+            history_service.record_changes(before, self.object, self.request.user)
+        return response
     model, form_class, title = Employee, EmployeeForm, "Edit employee"
     success_url, success_message = reverse_lazy("employee_list"), "Employee updated."
 
@@ -155,20 +223,20 @@ def employee_deactivate(request, pk):
     form = DeactivateEmployeeForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         try:
-            employee_service.deactivate_employee(emp, **form.cleaned_data)
+            employee_service.deactivate_employee(emp, by=request.user, **form.cleaned_data)
         except ValidationError as exc:
             form.add_error(None, exc)
         else:
             messages.success(request, f"{emp.name} deactivated. Their records are kept and their login is disabled.")
             return redirect("employee_list")
-    return render(request, "form.html", {"form": form, "title": f"Deactivate {emp.name}"})
+    return render(request, "employee_deactivate.html", {"form": form, "emp": emp})
 
 
 @permission_required(roles.DEACTIVATE_EMPLOYEE)
 def employee_reactivate(request, pk):
     emp = get_object_or_404(Employee, pk=pk)
     if request.method == "POST":
-        employee_service.reactivate_employee(emp)
+        employee_service.reactivate_employee(emp, by=request.user)
         messages.success(request, f"{emp.name} reactivated.")
     return redirect("employee_list")
 

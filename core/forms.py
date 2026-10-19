@@ -16,15 +16,19 @@ class EmployeeForm(forms.ModelForm):
         model = Employee
         fields = ["user", "employee_number", "name", "designation", "basic_salary", "email", "phone", "joined_on",
                   "department", "position", "employment_type", "work_location", "work_schedule", "manager",
-                  "employment_status", "confirmation_date"]
-        widgets = {"joined_on": D, "confirmation_date": D}
+                  "employment_status", "confirmation_date",
+                  "address", "emergency_contact_name", "emergency_contact_phone"]
+        widgets = {"joined_on": D, "confirmation_date": D, "address": forms.Textarea(attrs={"rows": 2})}
         labels = {"user": "Login account", "employment_status": "Status", "employee_number": "Employee ID"}
 
-    def __init__(self, *args, can_edit_pay=False, can_link_account=False, **kwargs):
+    def __init__(self, *args, can_edit_pay=False, can_link_account=False, can_edit_personal=True, **kwargs):
         super().__init__(*args, **kwargs)
         # Restricted fields are removed entirely, so a crafted POST cannot set them either.
         if not can_edit_pay:
             del self.fields["basic_salary"]
+        if not can_edit_personal:
+            for name in ("address", "emergency_contact_name", "emergency_contact_phone"):
+                del self.fields[name]
         if not can_link_account:
             del self.fields["user"]
         else:
@@ -51,6 +55,15 @@ class EmployeeForm(forms.ModelForm):
         for name in ("department", "position", "employment_type", "work_location", "work_schedule"):
             self.fields[name].queryset = self.fields[name].queryset.filter(
                 **({"is_active": True} if hasattr(self.fields[name].queryset.model, "is_active") else {}))
+
+
+class EmployeeSelfForm(forms.ModelForm):
+    """The only fields an employee may change on their own record."""
+
+    class Meta:
+        model = Employee
+        fields = ["email", "phone", "address", "emergency_contact_name", "emergency_contact_phone"]
+        widgets = {"address": forms.Textarea(attrs={"rows": 3})}
 
 
 class DeactivateEmployeeForm(forms.Form):

@@ -41,6 +41,8 @@
       {% if perms.core.view_all_attendance %}Dashboard{% else %}My Dashboard{% endif %}
     </a>
 
+    {% if user.employee_profile %}<a class="{% if n == 'my_profile' or n == 'my_profile_edit' %}on{% endif %}" href="{% url 'my_profile' %}">My profile</a>{% endif %}
+
     {% if perms.core.view_all_attendance %}
     {% if perms.core.view_employee %}
     <details {% if 'employee' in n %}open{% endif %}><summary>Employees</summary>

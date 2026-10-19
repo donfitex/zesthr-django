@@ -331,4 +331,8 @@ label{display:block;font-weight:500;margin-bottom:.9rem;font-size:.92rem}label s
 .holiday-tabs{display:flex;gap:.5rem;margin-bottom:1rem}
 .holiday-tab{padding:.45rem 1rem;border-radius:8px;background:var(--card);border:1px solid var(--line);color:var(--ink);font-weight:500;font-size:.9rem}
 .holiday-tab.active{background:var(--teal);color:#fff;border-color:var(--teal)}
-
+.profile-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem}.profile-grid .card{margin-bottom:0}.card h2{margin:.1rem 0 .8rem;font-size:1.05rem}
+.dl{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1.2rem;margin:0}.dl dt{color:var(--mut)}.dl dd{margin:0;overflow-wrap:anywhere}
+.muted{color:var(--mut);margin:.2rem 0 0}.pager{display:flex;gap:1rem;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:.8rem .2rem 0}.pager a{font-weight:600}
+.head .row-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+@media (max-width:560px){.dl{grid-template-columns:1fr}.dl dt{margin-top:.5rem}}
