@@ -1,0 +1,4 @@
+-r base.txt
+gunicorn>=22.0
+whitenoise>=6.6
+psycopg[binary]>=3.1
