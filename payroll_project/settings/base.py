@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .env import env
+from .env import env, env_bool
 
 # settings/base.py -> settings -> payroll_project -> project root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -34,6 +34,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.ForcePasswordChangeMiddleware",
 ]
 
 ROOT_URLCONF = "payroll_project.urls"
@@ -57,7 +58,7 @@ WSGI_APPLICATION = "payroll_project.wsgi.application"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
@@ -72,6 +73,20 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"  # target of `collectstatic` (production)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Sessions: sliding idle timeout (each request renews it) -----------------
+SESSION_IDLE_MINUTES = int(env("DJANGO_SESSION_IDLE_MINUTES", "60"))
+SESSION_COOKIE_AGE = SESSION_IDLE_MINUTES * 60
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# --- Password reset and sign-in protection ---------------------------------
+PASSWORD_RESET_TIMEOUT = int(env("DJANGO_PASSWORD_RESET_MINUTES", "60")) * 60  # reset links expire
+LOGIN_MAX_FAILURES = int(env("DJANGO_LOGIN_MAX_FAILURES", "5"))
+LOGIN_FAILURE_WINDOW_MINUTES = int(env("DJANGO_LOGIN_FAILURE_WINDOW_MINUTES", "15"))
+# Trust X-Forwarded-For for the audit log's IP address ONLY if your proxy overwrites it.
+TRUST_X_FORWARDED_FOR = env_bool("DJANGO_TRUST_X_FORWARDED_FOR", False)
+DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", "HROS <noreply@localhost>")
 
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "dashboard"

@@ -25,6 +25,7 @@ VIEW_EMPLOYEE_PAY = "core.view_employee_pay"
 CHANGE_EMPLOYEE_PAY = "core.change_employee_pay"
 LINK_EMPLOYEE_ACCOUNT = "core.link_employee_account"
 DEACTIVATE_EMPLOYEE = "core.deactivate_employee"
+VIEW_SECURITY_LOG = "core.view_security_log"
 ADD_ATTENDANCE = "core.add_attendance"
 CHANGE_ATTENDANCE = "core.change_attendance"
 DELETE_ATTENDANCE = "core.delete_attendance"
@@ -47,7 +48,7 @@ ROLE_PERMISSIONS = {
     # Manages accounts and groups. Deliberately has NO access to salary data.
     SYSTEM_ADMIN: [
         "auth.view_user", "auth.add_user", "auth.change_user", "auth.delete_user",
-        "auth.view_group",
+        "auth.view_group", VIEW_SECURITY_LOG,
     ],
     # Full HR access, including payroll.
     HR_ADMIN: [

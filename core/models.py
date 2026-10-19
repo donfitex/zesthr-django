@@ -325,3 +325,55 @@ class LeaveApplication(models.Model):
     def __str__(self):
         return f"{self.emp.name} - {self.get_leave_type_display()} ({self.start_date})"
 
+
+
+class AccountSecurity(models.Model):
+    """Per-login security state that Django's User model does not carry."""
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="security")
+    must_change_password = models.BooleanField(default=False)
+    password_changed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "account_security"
+
+    def __str__(self):
+        return f"Security state of {self.user}"
+
+
+class SecurityEvent(models.Model):
+    """Append-only audit trail of sign-ins and account changes. Never stores passwords."""
+
+    LOGIN_SUCCESS, LOGIN_FAILED, LOGIN_BLOCKED, LOGOUT = "LOGIN_SUCCESS", "LOGIN_FAILED", "LOGIN_BLOCKED", "LOGOUT"
+    PASSWORD_CHANGED, PASSWORD_RESET_REQUESTED = "PASSWORD_CHANGED", "PASSWORD_RESET_REQUESTED"
+    PASSWORD_RESET_COMPLETED, PASSWORD_CHANGE_REQUIRED = "PASSWORD_RESET_COMPLETED", "PASSWORD_CHANGE_REQUIRED"
+    ACCOUNT_DEACTIVATED, ACCOUNT_ACTIVATED = "ACCOUNT_DEACTIVATED", "ACCOUNT_ACTIVATED"
+    TYPES = [
+        (LOGIN_SUCCESS, "Signed in"), (LOGIN_FAILED, "Failed sign-in"), (LOGIN_BLOCKED, "Sign-in blocked (too many failures)"),
+        (LOGOUT, "Signed out"), (PASSWORD_CHANGED, "Password changed"),
+        (PASSWORD_RESET_REQUESTED, "Password reset requested"), (PASSWORD_RESET_COMPLETED, "Password reset completed"),
+        (PASSWORD_CHANGE_REQUIRED, "Password change required"),
+        (ACCOUNT_DEACTIVATED, "Account deactivated"), (ACCOUNT_ACTIVATED, "Account activated"),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="security_events")
+    username = models.CharField(max_length=150, blank=True, help_text="Name typed or account concerned")
+    event_type = models.CharField(max_length=30, choices=TYPES)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=255, blank=True)
+    detail = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "security_event"
+        ordering = ["-created_at", "-id"]
+        permissions = [("view_security_log", "Can view the sign-in and account security log")]
+        indexes = [models.Index(fields=["username", "event_type", "created_at"], name="secevent_lookup_idx")]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()}: {self.username or self.user_id}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError("Security events cannot be modified.")
+        super().save(*args, **kwargs)

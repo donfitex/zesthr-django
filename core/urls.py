@@ -1,10 +1,17 @@
 from django.contrib.auth import views as auth
+from django.contrib.auth.decorators import login_required
 from django.urls import path
 
 from . import views as v
+from . import views_auth as a
 
 urlpatterns = [
-    path("login/", auth.LoginView.as_view(template_name="login.html"), name="login"),
+    path("login/", a.LoginView.as_view(), name="login"),
+    path("password/change/", login_required(a.PasswordChangeView.as_view()), name="password_change"),
+    path("password/reset/", a.PasswordResetView.as_view(), name="password_reset"),
+    path("password/reset/sent/", auth.PasswordResetDoneView.as_view(template_name="password_reset_done.html"), name="password_reset_done"),
+    path("password/reset/<uidb64>/<token>/", a.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
+    path("password/reset/complete/", auth.PasswordResetCompleteView.as_view(template_name="password_reset_complete.html"), name="password_reset_complete"),
     path("logout/", auth.LogoutView.as_view(), name="logout"),
     path("", v.home, name="home"),
     path("dashboard/", v.dashboard, name="dashboard"),

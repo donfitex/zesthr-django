@@ -13,5 +13,7 @@ class CoreConfig(AppConfig):
     name = "core"
 
     def ready(self):
+        from . import signals  # noqa: F401  (connects the sign-in audit receivers)
+
         # Keep role groups in step with core/roles.py after every `migrate`.
         post_migrate.connect(_sync_roles, sender=self)

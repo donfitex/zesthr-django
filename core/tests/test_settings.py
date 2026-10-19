@@ -11,6 +11,7 @@ GOOD = {
     "DJANGO_SECRET_KEY": "q7Zk-R2mVx9LpT4wYb8NcD3hJf6GsA1eUo5iKy0XrWt2MvBnCzHj7PdQaLgE4S9u",
     "DJANGO_ALLOWED_HOSTS": "hr.example.com",
     "DB_NAME": "n", "DB_USER": "u", "DB_PASSWORD": "p", "DB_HOST": "h",
+    "DJANGO_EMAIL_HOST": "smtp.example.com", "DJANGO_DEFAULT_FROM_EMAIL": "HROS <hr@example.com>",
 }
 
 

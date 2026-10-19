@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from ..models import Employee
+from . import accounts
 
 DEACTIVATION_STATUSES = ("SUSPENDED", "INACTIVE", "RESIGNED", "TERMINATED", "RETIRED")
 
@@ -24,8 +25,7 @@ def deactivate_employee(employee, *, status, separation_date=None, reason=""):
     employee.full_clean()
     employee.save()
     if employee.user_id:  # revoke access immediately
-        employee.user.is_active = False
-        employee.user.save(update_fields=["is_active"])
+        accounts.set_account_active(employee.user, False)
     return employee
 
 
@@ -38,6 +38,5 @@ def reactivate_employee(employee, *, status="ACTIVE"):
     employee.separation_reason = ""
     employee.save()
     if employee.user_id:
-        employee.user.is_active = True
-        employee.user.save(update_fields=["is_active"])
+        accounts.set_account_active(employee.user, True)
     return employee
