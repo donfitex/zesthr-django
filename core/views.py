@@ -1,25 +1,27 @@
 import calendar
-from datetime import date, timedelta
-from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import PermissionDenied
 from django.contrib.messages.views import SuccessMessageMixin
-from django.db.models import Count, Q, Sum
+from django.core.exceptions import PermissionDenied
+from django.db.models import Q, ProtectedError, Sum
+from django.http import Http404
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from .forms import AttendanceForm, EmployeeForm, LeaveApplicationForm
-from . import roles
+from . import roles, selectors
+from .forms import AttendanceForm, DeactivateEmployeeForm, EmployeeForm, LeaveApplicationForm
 from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
-from .permissions import PermissionRequiredMixin, get_employee_profile, permission_required, require_perm
-
-CENT = Decimal("0.01")
-
+from .permissions import (PermissionRequiredMixin, get_employee_profile, permission_required,
+                          require_employee_profile, require_perm)
+from .services import attendance as attendance_service
+from .services import employees as employee_service
+from .services import leave as leave_service
+from .services import payroll as payroll_service
 
 def period(request):
     """Month/year filter shared by report, attendance log and payroll."""
@@ -37,45 +39,18 @@ def period(request):
     }
 
 
-def summary(month, year):
-    """Per-employee attendance totals + salary: net = basic - (absent_days x per_day_pay)."""
-    f = Q(attendance__date__month=month, attendance__date__year=year)
-    emps = Employee.objects.filter(is_active=True).annotate(
-        present=Count("attendance", filter=f & Q(attendance__status="P")),
-        half=Count("attendance", filter=f & Q(attendance__status="H")),
-        absent=Count("attendance", filter=f & Q(attendance__status="A")),
-        leave=Count("attendance", filter=f & Q(attendance__status="L")),
-    )
-    days = calendar.monthrange(year, month)[1]
-    rows = []
-    for e in emps:
-        per_day = (e.basic_salary / days).quantize(CENT)
-        absent_days = Decimal(e.absent) + Decimal(e.half) / 2
-        deduction = min((absent_days * per_day).quantize(CENT), e.basic_salary)
-        rows.append({"emp": e, "present": e.present, "half": e.half, "absent": e.absent,
-                     "leave": e.leave, "absent_days": absent_days, "per_day": per_day,
-                     "deduction": deduction, "net": e.basic_salary - deduction})
-    return rows
-
-
 def home(request):
     """Public landing page. Live company data is shown only to authorized users;
     everyone else sees the template's sample figures."""
     today = timezone.localdate()
     ctx = {"today": today, "month_name": calendar.month_name[today.month], "year": today.year}
     if request.user.has_perm(roles.VIEW_ALL_ATTENDANCE):
-        total = Employee.objects.filter(is_active=True).count()
-        recs = Attendance.objects.filter(date=today, emp__is_active=True)
-        ctx.update(
-            total_employees=total,
-            present_count=recs.filter(status__in=["P", "H"]).count(),
-            absent_count=recs.filter(status="A").count(),
-            leave_count=recs.filter(status="L").count(),
-            unmarked_count=max(0, total - recs.count()),
-            recent_checkins=recs.select_related("emp")[:5],
-        )
+        snap = selectors.company_snapshot(today, recent_limit=5)
+        ctx.update(total_employees=snap["total"], present_count=snap["present"],
+                   absent_count=snap["absent"], leave_count=snap["leave"],
+                   unmarked_count=snap["unmarked"], recent_checkins=snap["recent"])
     if request.user.has_perm(roles.VIEW_PAYROLL_REPORT):
-        ctx["payroll_total"] = Salary.objects.filter(month=today.month, year=today.year).aggregate(t=Sum("net"))["t"] or 0
+        ctx["payroll_total"] = selectors.net_payroll_total(today.month, today.year)
     return render(request, "home.html", ctx)
 
 
@@ -85,48 +60,20 @@ def dashboard(request):
     emp_profile = get_employee_profile(request.user)
     can_see_company = request.user.has_perm(roles.VIEW_ALL_ATTENDANCE)
 
-    # Employee Portal
+    # Employee portal
     if not can_see_company and emp_profile:
-        rec = Attendance.objects.filter(emp=emp_profile, date=today).first()
-        recent = Attendance.objects.filter(emp=emp_profile).order_by("-date")[:10]
-        leaves = LeaveApplication.objects.filter(emp=emp_profile).order_by("-applied_on")[:5]
-        sick_used = emp_profile.sick_leaves_used_this_month(today.month, today.year)
-        sick_rem = emp_profile.sick_leaves_remaining(today.month, today.year)
-        upcoming_holiday = Holiday.objects.filter(date__gte=today).order_by("date").first()
-        my_salary = Salary.objects.filter(emp=emp_profile, month=today.month, year=today.year).first()
-
-        ctx = {
-            "emp": emp_profile,
-            "today": today,
-            "today_rec": rec,
-            "recent": recent,
-            "leaves": leaves,
-            "sick_used": sick_used,
-            "sick_rem": sick_rem,
-            "upcoming_holiday": upcoming_holiday,
-            "my_salary": my_salary,
-        }
-        return render(request, "employee_dashboard.html", ctx)
+        return render(request, "employee_dashboard.html", selectors.employee_snapshot(emp_profile, today))
 
     # Administrator / HR / payroll portal
     if not can_see_company:
         raise PermissionDenied
-    total = Employee.objects.filter(is_active=True).count()
-    recs = Attendance.objects.filter(date=today, emp__is_active=True)
-    ctx = {
-        "total": total,
-        "present": recs.filter(status__in=["P", "H"]).count(),
-        "absent": recs.filter(status="A").count(),
-        "leave": recs.filter(status="L").count(),
-        "unmarked": max(0, total - recs.count()),
-        "recent": recs.select_related("emp")[:8],
-        "today": today,
-        # None means "not permitted": the template hides the tile.
-        "pending_leaves": (LeaveApplication.objects.filter(status="PENDING").count()
-                           if request.user.has_perm(roles.VIEW_ALL_LEAVES) else None),
-        "payroll": (Salary.objects.filter(month=today.month, year=today.year).aggregate(t=Sum("net"))["t"] or 0
-                    if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None),
-    }
+    ctx = selectors.company_snapshot(today)
+    ctx["today"] = today
+    # None means "not permitted": the template hides the tile.
+    ctx["pending_leaves"] = (selectors.pending_leave_count()
+                             if request.user.has_perm(roles.VIEW_ALL_LEAVES) else None)
+    ctx["payroll"] = (selectors.net_payroll_total(today.month, today.year)
+                      if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None)
     return render(request, "dashboard.html", ctx)
 
 
@@ -167,6 +114,7 @@ class EmployeeFormMixin:
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["can_edit_pay"] = self.request.user.has_perm(roles.CHANGE_EMPLOYEE_PAY)
+        kwargs["can_link_account"] = self.request.user.has_perm(roles.LINK_EMPLOYEE_ACCOUNT)
         return kwargs
 
 
@@ -185,11 +133,46 @@ class EmployeeUpdate(PermissionRequiredMixin, EmployeeFormMixin, Base, UpdateVie
 
 class EmployeeDelete(PermissionRequiredMixin, Base, DeleteView):
     permission_required = roles.DELETE_EMPLOYEE
+
+    def form_valid(self, form):
+        try:
+            return super().form_valid(form)
+        except ProtectedError:
+            messages.error(self.request, "This employee has attendance, leave or payroll history and cannot "
+                                         "be deleted. Deactivate the employee instead.")
+            return redirect("employee_list")
     model, title, template_name = Employee, "Delete employee", "confirm_delete.html"
     success_url, success_message = reverse_lazy("employee_list"), "Employee deleted."
 
 
 # ---------- Attendance ----------
+@permission_required(roles.DEACTIVATE_EMPLOYEE)
+def employee_deactivate(request, pk):
+    emp = get_object_or_404(Employee, pk=pk)
+    if not emp.is_active:
+        messages.info(request, f"{emp.name} is already inactive.")
+        return redirect("employee_list")
+    form = DeactivateEmployeeForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            employee_service.deactivate_employee(emp, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, f"{emp.name} deactivated. Their records are kept and their login is disabled.")
+            return redirect("employee_list")
+    return render(request, "form.html", {"form": form, "title": f"Deactivate {emp.name}"})
+
+
+@permission_required(roles.DEACTIVATE_EMPLOYEE)
+def employee_reactivate(request, pk):
+    emp = get_object_or_404(Employee, pk=pk)
+    if request.method == "POST":
+        employee_service.reactivate_employee(emp)
+        messages.success(request, f"{emp.name} reactivated.")
+    return redirect("employee_list")
+
+
 @login_required
 def attendance_today(request):
     today = timezone.localdate()
@@ -197,36 +180,39 @@ def attendance_today(request):
     can_mark_others = request.user.has_perm(roles.MARK_ATTENDANCE)
 
     if request.method == "POST":
-        emp_id = request.POST.get("emp_id")
-        emp = get_object_or_404(Employee, pk=emp_id) if emp_id else emp_profile
+        raw_id = request.POST.get("emp_id")
+        try:
+            emp_id = int(raw_id) if raw_id else None
+        except ValueError:
+            raise Http404("Unknown employee.")
 
-        if not emp:
-            messages.error(request, "Employee profile not found.")
-            return redirect("attendance_today")
-
-        # Acting on someone else's attendance needs the explicit permission.
-        if not can_mark_others and (emp_profile is None or emp.pk != emp_profile.pk):
-            raise PermissionDenied
+        if can_mark_others and emp_id is not None:
+            emp = get_object_or_404(Employee, pk=emp_id)
+        else:
+            # Self-service: the employee always comes from the logged-in account.
+            emp = require_employee_profile(request.user)
+            # A submitted id that points at someone else is tampering, not a typo.
+            if emp_id is not None and emp_id != emp.pk:
+                raise PermissionDenied
 
         action = request.POST.get("action")
         # Employees may only punch in/out. Setting a status (absent, half day,
         # leave) changes pay, so it is reserved for attendance managers.
-        if action in ("A", "H", "L") and not can_mark_others:
+        if action in attendance_service.MARKABLE_STATUSES and not can_mark_others:
             raise PermissionDenied
-        now = timezone.localtime().time().replace(microsecond=0)
-        rec, _ = Attendance.objects.get_or_create(emp=emp, date=today)
+
         if action == "check_in":
-            rec.check_in, rec.status = now, "P"
-            messages.success(request, f"Punched IN at {now.strftime('%I:%M %p')}.")
+            rec = attendance_service.check_in(emp)
+            messages.success(request, f"Punched IN at {rec.check_in.strftime('%I:%M %p')}.")
         elif action == "check_out":
-            rec.check_out = now
-            messages.success(request, f"Punched OUT at {now.strftime('%I:%M %p')}.")
-        elif action in ("A", "H", "L"):
-            rec.status = action
-            if action in ("A", "L"):
-                rec.check_in = rec.check_out = None
+            rec = attendance_service.check_out(emp)
+            messages.success(request, f"Punched OUT at {rec.check_out.strftime('%I:%M %p')}.")
+        elif action in attendance_service.MARKABLE_STATUSES:
+            rec = attendance_service.mark_status(emp, action)
             messages.success(request, f"{emp.name}: status marked as {rec.get_status_display()}.")
-        rec.save()
+        else:
+            # Unknown action: change nothing (it used to create a "Present" record).
+            messages.error(request, "Unknown attendance action.")
 
         if not can_mark_others:
             return redirect("dashboard")
@@ -237,9 +223,8 @@ def attendance_today(request):
             return redirect("dashboard")
         raise PermissionDenied
 
-    records = {a.emp_id: a for a in Attendance.objects.filter(date=today)}
-    rows = [(e, records.get(e.id)) for e in Employee.objects.filter(is_active=True)]
-    return render(request, "attendance_today.html", {"rows": rows, "today": today})
+    return render(request, "attendance_today.html",
+                  {"rows": selectors.attendance_register(today), "today": today})
 
 
 class AttendanceList(LoginRequiredMixin, ListView):
@@ -294,7 +279,7 @@ class AttendanceDelete(PermissionRequiredMixin, Base, DeleteView):
 @permission_required(roles.VIEW_PAYROLL_REPORT)
 def monthly_report(request):
     p = period(request)
-    rows = summary(p["month"], p["year"])
+    rows = payroll_service.calculate_payroll_rows(p["month"], p["year"])
     p.update(rows=rows, total_net=sum(r["net"] for r in rows), total_ded=sum(r["deduction"] for r in rows),
              month_name=calendar.month_name[p["month"]])
     return render(request, "report.html", p)
@@ -305,11 +290,7 @@ def payroll(request):
     p = period(request)
     if request.method == "POST":
         require_perm(request.user, roles.GENERATE_PAYROLL)
-        for r in summary(p["month"], p["year"]):
-            Salary.objects.update_or_create(
-                emp=r["emp"], month=p["month"], year=p["year"],
-                defaults={"absent_days": r["absent_days"], "per_day_pay": r["per_day"],
-                          "gross": r["emp"].basic_salary, "deduction": r["deduction"], "net": r["net"]})
+        payroll_service.generate_payroll(p["month"], p["year"])
         messages.success(request, "Payroll generated.")
         return redirect(f"{request.path}?month={p['month']}&year={p['year']}")
     slips = Salary.objects.select_related("emp").filter(month=p["month"], year=p["year"])
@@ -327,10 +308,7 @@ def slip(request, pk):
             raise PermissionDenied
         slips = slips.filter(emp=emp_profile)  # someone else's slip is a 404, not a hint it exists
     s = get_object_or_404(slips, pk=pk)
-    f = Q(date__month=s.month, date__year=s.year)
-    counts = s.emp.attendance.aggregate(
-        present=Count("id", filter=f & Q(status="P")), half=Count("id", filter=f & Q(status="H")),
-        absent=Count("id", filter=f & Q(status="A")), leave=Count("id", filter=f & Q(status="L")))
+    counts = payroll_service.attendance_totals(s)
     return render(request, "slip.html", {"s": s, "c": counts, "month_name": calendar.month_name[s.month]})
 
 
@@ -388,13 +366,8 @@ def leaves_list(request):
 @login_required
 def leave_apply(request):
     today = timezone.localdate()
-    emp_profile = getattr(request.user, "employee_profile", None)
-
-    if not emp_profile:
-        emp_profile = Employee.objects.filter(is_active=True).first()
-        if not emp_profile:
-            messages.error(request, "No employee record found to apply for leave.")
-            return redirect("leaves_list")
+    # The applicant is always the logged-in user's own (active) employee profile.
+    emp_profile = require_employee_profile(request.user)
 
     sick_used = emp_profile.sick_leaves_used_this_month(today.month, today.year)
     sick_rem = emp_profile.sick_leaves_remaining(today.month, today.year)
@@ -402,10 +375,7 @@ def leave_apply(request):
     if request.method == "POST":
         form = LeaveApplicationForm(request.POST, employee=emp_profile)
         if form.is_valid():
-            leave = form.save(commit=False)
-            leave.emp = emp_profile
-            leave.status = "PENDING"
-            leave.save()
+            leave = leave_service.submit_leave(emp_profile, **form.cleaned_data)
             messages.success(request, f"Leave application for {leave.days_count} day(s) submitted. Awaiting HR review.")
             return redirect("leaves_list")
     else:
@@ -428,22 +398,10 @@ def leave_action(request, pk):
         action = request.POST.get("action")
         note = request.POST.get("admin_note", "").strip()
         if action == "approve":
-            leave.status = "APPROVED"
-            leave.admin_note = note
-            leave.save()
-            curr = leave.start_date
-            while curr <= leave.end_date:
-                Attendance.objects.update_or_create(
-                    emp=leave.emp, date=curr,
-                    defaults={"status": "L", "check_in": None, "check_out": None}
-                )
-                curr += timedelta(days=1)
+            leave_service.approve_leave(leave, note)
             messages.success(request, f"Leave for {leave.emp.name} approved. Dates recorded as Paid Leave.")
         elif action == "reject":
-            leave.status = "REJECTED"
-            leave.admin_note = note
-            leave.save()
+            leave_service.reject_leave(leave, note)
             messages.info(request, f"Leave application for {leave.emp.name} rejected.")
 
     return redirect("leaves_list")
-

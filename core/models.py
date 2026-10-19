@@ -1,11 +1,110 @@
 from datetime import date, datetime
 
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.utils import timezone
 
 
+class Department(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=10, unique=True, help_text="Short code, e.g. FIN")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "department"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class JobPosition(models.Model):
+    title = models.CharField(max_length=100, unique=True)
+    department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True,
+                                   related_name="positions", help_text="Optional: where this position usually sits")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "job_position"
+        ordering = ["title"]
+
+    def __str__(self):
+        return self.title
+
+
+class EmploymentType(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    class Meta:
+        db_table = "employment_type"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class WorkLocation(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    city = models.CharField(max_length=100, blank=True)
+    country = models.CharField(max_length=100, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "work_location"
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+def default_working_days():
+    return [0, 1, 2, 3, 4]  # Monday..Friday
+
+
+def validate_working_days(value):
+    if (not isinstance(value, list) or not value
+            or any(not isinstance(d, int) or isinstance(d, bool) or d not in range(7) for d in value)
+            or len(set(value)) != len(value)):
+        raise ValidationError("Working days must be a non-empty list of unique weekday numbers 0 (Mon) to 6 (Sun).")
+
+
+class WorkSchedule(models.Model):
+    """A reusable shift pattern. Lateness and overtime rules are built on it in Phase 4.
+
+    end_time earlier than start_time means an overnight shift.
+    """
+
+    name = models.CharField(max_length=100, unique=True)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    break_minutes = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(600)])
+    grace_minutes = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(240)])
+    working_days = models.JSONField(default=default_working_days, validators=[validate_working_days],
+                                    help_text="Weekday numbers, 0=Monday ... 6=Sunday")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "work_schedule"
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.start_time:%H:%M}-{self.end_time:%H:%M})"
+
+    def clean(self):
+        if self.start_time and self.end_time and self.start_time == self.end_time:
+            raise ValidationError("Start and end time cannot be the same.")
+
+
 class Employee(models.Model):
+    ACTIVE_STATUSES = ("ACTIVE", "PROBATION")
+    SEPARATED_STATUSES = ("RESIGNED", "TERMINATED", "RETIRED")
+    STATUS = [
+        ("PROBATION", "On probation"), ("ACTIVE", "Active"), ("SUSPENDED", "Suspended"),
+        ("INACTIVE", "Inactive"), ("RESIGNED", "Resigned"), ("TERMINATED", "Terminated"), ("RETIRED", "Retired"),
+    ]
+
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="employee_profile")
     name = models.CharField(max_length=100)
     designation = models.CharField(max_length=100)
@@ -13,7 +112,21 @@ class Employee(models.Model):
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     joined_on = models.DateField(default=date.today)
-    is_active = models.BooleanField(default=True)
+    # Derived from employment_status on every save (never edit it directly).
+    is_active = models.BooleanField(default=True, editable=False)
+
+    employee_number = models.CharField(max_length=20, unique=True, null=True, blank=True,
+                                       help_text="Leave blank to generate automatically (EMP-00001)")
+    department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
+    position = models.ForeignKey(JobPosition, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
+    employment_type = models.ForeignKey(EmploymentType, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
+    work_location = models.ForeignKey(WorkLocation, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
+    work_schedule = models.ForeignKey(WorkSchedule, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
+    manager = models.ForeignKey("self", on_delete=models.SET_NULL, null=True, blank=True, related_name="direct_reports")
+    employment_status = models.CharField(max_length=10, choices=STATUS, default="ACTIVE")
+    confirmation_date = models.DateField(null=True, blank=True, help_text="End of probation")
+    separation_date = models.DateField(null=True, blank=True)
+    separation_reason = models.CharField(max_length=255, blank=True)
 
     class Meta:
         db_table = "employee"
@@ -21,10 +134,45 @@ class Employee(models.Model):
         permissions = [
             ("view_employee_pay", "Can view employee pay details"),
             ("change_employee_pay", "Can change employee pay details"),
+            ("link_employee_account", "Can link or unlink an employee's login account"),
+            ("deactivate_employee", "Can deactivate and reactivate employees"),
         ]
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_separated(self):
+        return self.employment_status in self.SEPARATED_STATUSES
+
+    def clean(self):
+        errors = {}
+        if self.manager_id:
+            if self.pk and self.manager_id == self.pk:
+                errors["manager"] = "An employee cannot be their own manager."
+            elif self.pk:
+                boss = self.manager
+                while boss is not None:  # walk up the chain looking for a cycle
+                    if boss.pk == self.pk:
+                        errors["manager"] = "This would create a reporting loop."
+                        break
+                    boss = boss.manager
+        if self.employment_status in self.SEPARATED_STATUSES and not self.separation_date:
+            errors["separation_date"] = "A separation date is required for this status."
+        if self.separation_date and self.joined_on and self.separation_date < self.joined_on:
+            errors["separation_date"] = "Separation date cannot be before the joining date."
+        if self.confirmation_date and self.joined_on and self.confirmation_date < self.joined_on:
+            errors["confirmation_date"] = "Confirmation date cannot be before the joining date."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.is_active = self.employment_status in self.ACTIVE_STATUSES
+        self.employee_number = (self.employee_number or "").strip() or None
+        super().save(*args, **kwargs)
+        if self.employee_number is None:
+            self.employee_number = f"EMP-{self.pk:05d}"
+            type(self).objects.filter(pk=self.pk).update(employee_number=self.employee_number)
 
     def sick_leaves_used_this_month(self, month=None, year=None):
         today = timezone.localdate()
@@ -43,7 +191,7 @@ class Employee(models.Model):
 
 class Attendance(models.Model):
     STATUS = [("P", "Present"), ("A", "Absent"), ("H", "Half day"), ("L", "Leave")]
-    emp = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="attendance")
+    emp = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="attendance")
     date = models.DateField(default=date.today)
     check_in = models.TimeField(null=True, blank=True)
     check_out = models.TimeField(null=True, blank=True)
@@ -68,7 +216,7 @@ class Attendance(models.Model):
 
 
 class Salary(models.Model):
-    emp = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="salaries")
+    emp = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="salaries")
     month = models.PositiveSmallIntegerField()
     year = models.PositiveSmallIntegerField()
     absent_days = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -116,7 +264,7 @@ class LeaveApplication(models.Model):
         ("APPROVED", "Approved"),
         ("REJECTED", "Rejected"),
     ]
-    emp = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name="leaves")
+    emp = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="leaves")
     leave_type = models.CharField(max_length=5, choices=LEAVE_TYPES, default="SL")
     start_date = models.DateField()
     end_date = models.DateField()

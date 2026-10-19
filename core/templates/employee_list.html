@@ -8,10 +8,10 @@
   <button class="btn ghost sm">Search</button>
 </form>
 <section class="card"><div class="scroll"><table>
-  <tr><th>Name</th><th>Designation</th>{% if perms.core.view_employee_pay %}<th>Basic salary</th>{% endif %}<th>Phone</th><th>Status</th><th></th></tr>
-  {% for e in employees %}<tr><td>{{ e.name }}</td><td>{{ e.designation }}</td>{% if perms.core.view_employee_pay %}<td>₹{{ e.basic_salary|floatformat:2 }}</td>{% endif %}<td>{{ e.phone|default:"-" }}</td>
-    <td><span class="tag {% if e.is_active %}P{% else %}A{% endif %}">{% if e.is_active %}Active{% else %}Inactive{% endif %}</span></td>
-    <td class="row-actions">{% if perms.core.view_all_attendance %}<a href="{% url 'attendance_list' %}?emp={{ e.id }}">Attendance</a>{% endif %}{% if perms.core.change_employee %}<a href="{% url 'employee_edit' e.pk %}">Edit</a>{% endif %}{% if perms.core.delete_employee %}<a class="danger" href="{% url 'employee_delete' e.pk %}">Delete</a>{% endif %}</td></tr>
-  {% empty %}<tr><td colspan="6" class="empty">No employees found.{% if perms.core.add_employee %} <a href="{% url 'employee_add' %}">Add the first one.</a>{% endif %}</td></tr>{% endfor %}
+  <tr><th>ID</th><th>Name</th><th>Department</th><th>Designation</th>{% if perms.core.view_employee_pay %}<th>Basic salary</th>{% endif %}<th>Phone</th><th>Status</th><th></th></tr>
+  {% for e in employees %}<tr><td>{{ e.employee_number|default:"-" }}</td><td>{{ e.name }}</td><td>{{ e.department|default:"-" }}</td><td>{{ e.position|default:e.designation }}</td>{% if perms.core.view_employee_pay %}<td>₹{{ e.basic_salary|floatformat:2 }}</td>{% endif %}<td>{{ e.phone|default:"-" }}</td>
+    <td><span class="tag {% if e.is_active %}P{% else %}A{% endif %}">{{ e.get_employment_status_display }}</span></td>
+    <td class="row-actions">{% if perms.core.view_all_attendance %}<a href="{% url 'attendance_list' %}?emp={{ e.id }}">Attendance</a>{% endif %}{% if perms.core.change_employee %}<a href="{% url 'employee_edit' e.pk %}">Edit</a>{% endif %}{% if perms.core.deactivate_employee %}{% if e.is_active %}<a class="danger" href="{% url 'employee_deactivate' e.pk %}">Deactivate</a>{% else %}<form method="post" action="{% url 'employee_reactivate' e.pk %}" style="display:inline">{% csrf_token %}<button class="linklike">Reactivate</button></form>{% endif %}{% endif %}{% if perms.core.delete_employee %}<a class="danger" href="{% url 'employee_delete' e.pk %}">Delete</a>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="8" class="empty">No employees found.{% if perms.core.add_employee %} <a href="{% url 'employee_add' %}">Add the first one.</a>{% endif %}</td></tr>{% endfor %}
 </table></div></section>
 {% endblock %}

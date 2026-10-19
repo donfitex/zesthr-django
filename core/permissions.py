@@ -13,6 +13,9 @@ from django.contrib.auth.mixins import PermissionRequiredMixin  # noqa: F401  (r
 from django.contrib.auth.views import redirect_to_login
 from django.core.exceptions import PermissionDenied
 
+__all__ = ["PermissionRequiredMixin", "get_employee_profile", "permission_required",
+           "require_employee_profile", "require_perm"]
+
 
 def permission_required(*perms):
     """Function-view decorator: require ALL given permissions."""
@@ -36,6 +39,20 @@ def get_employee_profile(user):
     if not user.is_authenticated:
         return None
     return getattr(user, "employee_profile", None)
+
+
+def require_employee_profile(user, *, active=True):
+    """Self-service actions need a real employee profile linked to the login.
+
+    There is deliberately NO fallback to "some other employee": if the account
+    is not linked (or the employee is deactivated, when `active=True`), refuse.
+    """
+    profile = get_employee_profile(user)
+    if profile is None:
+        raise PermissionDenied("No employee profile is linked to your account. Please contact HR.")
+    if active and not profile.is_active:
+        raise PermissionDenied("Your employee record is inactive. Please contact HR.")
+    return profile
 
 
 def require_perm(user, perm):

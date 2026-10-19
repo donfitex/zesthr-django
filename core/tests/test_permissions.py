@@ -244,7 +244,7 @@ class RoleCapabilityTests(BaseTest):
         form = self.client.get(reverse("employee_edit", args=[self.alice.pk])).context["form"]
         self.assertNotIn("basic_salary", form.fields)
         self.client.post(reverse("employee_edit", args=[self.alice.pk]), {
-            "name": "Alice", "designation": "Lead", "basic_salary": "999999", "joined_on": "2026-01-01", "is_active": "on"})
+            "name": "Alice", "designation": "Lead", "basic_salary": "999999", "joined_on": "2026-01-01", "employment_status": "ACTIVE"})
         self.alice.refresh_from_db()
         self.assertEqual(self.alice.designation, "Lead")
         self.assertEqual(self.alice.basic_salary, Decimal("30000.00"))

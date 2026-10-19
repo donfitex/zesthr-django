@@ -6,7 +6,8 @@ from django.contrib.auth.models import Group, User
 from django.core.management.base import BaseCommand, CommandError
 
 from core import roles
-from core.models import Attendance, Employee, Holiday, LeaveApplication
+from core.models import (Attendance, Department, Employee, EmploymentType, Holiday, JobPosition,
+                         LeaveApplication, WorkLocation, WorkSchedule)
 from core.roles import sync_roles
 
 
@@ -189,6 +190,26 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(self.style.SUCCESS("[OK] Sample leave requests (Pending & Approved) seeded."))
+
+        # Organization data: departments, a location and a standard schedule; employees
+        # are spread across the departments and the first employee manages the rest.
+        depts = [Department.objects.get_or_create(code=c, defaults={"name": n})[0]
+                 for c, n in (("ENG", "Engineering"), ("OPS", "Operations"), ("FIN", "Finance"))]
+        office, _ = WorkLocation.objects.get_or_create(name="Head Office", defaults={"city": "Mumbai", "country": "India"})
+        sched, _ = WorkSchedule.objects.get_or_create(
+            name="Standard day", defaults={"start_time": time(9, 0), "end_time": time(18, 0), "break_minutes": 60,
+                                           "grace_minutes": 10})
+        full_time = EmploymentType.objects.get(name="Full-time")
+        people = list(Employee.objects.filter(user__username__regex=r"^[a-z]+\.[a-z]+$")
+                      .exclude(user__username__in=["hr.officer", "payroll.officer"]).order_by("pk"))
+        lead = people[0] if people else None
+        for i, e in enumerate(people):
+            e.department = depts[i % len(depts)]
+            e.position = JobPosition.objects.get_or_create(title=e.designation, defaults={"department": e.department})[0]
+            e.employment_type, e.work_location, e.work_schedule = full_time, office, sched
+            e.manager = lead if e != lead else None
+            e.save()
+        self.stdout.write(self.style.SUCCESS("[OK] Departments, location, schedule and reporting lines seeded."))
         self.stdout.write(self.style.SUCCESS("\n" + "="*50))
         self.stdout.write(self.style.SUCCESS("Demo setup complete!"))
         self.stdout.write(self.style.SUCCESS("HR Admin:   admin / admin123"))

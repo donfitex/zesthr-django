@@ -23,6 +23,8 @@ CHANGE_EMPLOYEE = "core.change_employee"
 DELETE_EMPLOYEE = "core.delete_employee"
 VIEW_EMPLOYEE_PAY = "core.view_employee_pay"
 CHANGE_EMPLOYEE_PAY = "core.change_employee_pay"
+LINK_EMPLOYEE_ACCOUNT = "core.link_employee_account"
+DEACTIVATE_EMPLOYEE = "core.deactivate_employee"
 ADD_ATTENDANCE = "core.add_attendance"
 CHANGE_ATTENDANCE = "core.change_attendance"
 DELETE_ATTENDANCE = "core.delete_attendance"
@@ -34,6 +36,13 @@ GENERATE_PAYROLL = "core.generate_payroll"
 VIEW_ALL_PAYSLIPS = "core.view_all_payslips"
 VIEW_PAYROLL_REPORT = "core.view_payroll_report"
 
+# Organization reference data (departments, positions, ...), managed in the admin site.
+REFERENCE_DATA_PERMISSIONS = [
+    f"core.{action}_{model}"
+    for model in ("department", "jobposition", "employmenttype", "worklocation", "workschedule")
+    for action in ("view", "add", "change", "delete")
+]
+
 ROLE_PERMISSIONS = {
     # Manages accounts and groups. Deliberately has NO access to salary data.
     SYSTEM_ADMIN: [
@@ -43,7 +52,8 @@ ROLE_PERMISSIONS = {
     # Full HR access, including payroll.
     HR_ADMIN: [
         VIEW_EMPLOYEE, ADD_EMPLOYEE, CHANGE_EMPLOYEE, DELETE_EMPLOYEE,
-        VIEW_EMPLOYEE_PAY, CHANGE_EMPLOYEE_PAY,
+        VIEW_EMPLOYEE_PAY, CHANGE_EMPLOYEE_PAY, LINK_EMPLOYEE_ACCOUNT, DEACTIVATE_EMPLOYEE,
+        *REFERENCE_DATA_PERMISSIONS,
         ADD_ATTENDANCE, CHANGE_ATTENDANCE, DELETE_ATTENDANCE,
         VIEW_ALL_ATTENDANCE, MARK_ATTENDANCE,
         VIEW_ALL_LEAVES, APPROVE_LEAVE,
