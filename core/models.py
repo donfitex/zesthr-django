@@ -137,6 +137,22 @@ class Employee(models.Model):
             ("link_employee_account", "Can link or unlink an employee's login account"),
             ("deactivate_employee", "Can deactivate and reactivate employees"),
         ]
+        indexes = [models.Index(fields=["is_active", "department"], name="emp_active_dept_idx")]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(basic_salary__gte=0), name="emp_basic_salary_non_negative"),
+            models.CheckConstraint(
+                name="emp_active_flag_matches_status",
+                condition=(models.Q(is_active=True, employment_status__in=["ACTIVE", "PROBATION"])
+                           | models.Q(is_active=False) & ~models.Q(employment_status__in=["ACTIVE", "PROBATION"]))),
+            models.CheckConstraint(
+                name="emp_separated_requires_date",
+                condition=~models.Q(employment_status__in=["RESIGNED", "TERMINATED", "RETIRED"])
+                | models.Q(separation_date__isnull=False)),
+            models.CheckConstraint(
+                name="emp_separation_not_before_joining",
+                condition=models.Q(separation_date__isnull=True) | models.Q(separation_date__gte=models.F("joined_on"))),
+            models.CheckConstraint(condition=~models.Q(manager=models.F("id")), name="emp_not_own_manager"),
+        ]
 
     def __str__(self):
         return self.name
@@ -146,6 +162,8 @@ class Employee(models.Model):
         return self.employment_status in self.SEPARATED_STATUSES
 
     def clean(self):
+        # is_active is derived; set it before Django validates the DB constraints.
+        self.is_active = self.employment_status in self.ACTIVE_STATUSES
         errors = {}
         if self.manager_id:
             if self.pk and self.manager_id == self.pk:
@@ -205,6 +223,9 @@ class Attendance(models.Model):
             ("view_all_attendance", "Can view attendance of all employees"),
             ("mark_attendance", "Can mark attendance on behalf of employees"),
         ]
+        # (emp, date) is already indexed by the unique constraint; this serves the
+        # "everyone on a given day" queries (registers, dashboards).
+        indexes = [models.Index(fields=["date", "status"], name="att_date_status_idx")]
 
     @property
     def hours(self):
@@ -234,6 +255,12 @@ class Salary(models.Model):
             ("generate_payroll", "Can generate payroll"),
             ("view_all_payslips", "Can view payslips of all employees"),
             ("view_payroll_report", "Can view payroll and salary reports"),
+        ]
+        indexes = [models.Index(fields=["year", "month"], name="salary_period_idx")]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(gross__gte=0), name="salary_gross_non_negative"),
+            models.CheckConstraint(condition=models.Q(deduction__gte=0), name="salary_deduction_non_negative"),
+            models.CheckConstraint(condition=models.Q(net__gte=0), name="salary_net_non_negative"),
         ]
 
 
@@ -279,6 +306,14 @@ class LeaveApplication(models.Model):
         permissions = [
             ("view_all_leaves", "Can view leave applications of all employees"),
             ("approve_leave", "Can approve or reject leave applications"),
+        ]
+        indexes = [
+            models.Index(fields=["status", "applied_on"], name="leave_status_applied_idx"),
+            models.Index(fields=["emp", "start_date"], name="leave_emp_start_idx"),
+        ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(end_date__gte=models.F("start_date")),
+                                   name="leave_end_not_before_start"),
         ]
 
     @property

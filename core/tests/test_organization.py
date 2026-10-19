@@ -43,6 +43,7 @@ class StatusTests(TestCase):
         self.assertTrue(e.is_active)
         for status, active in (("PROBATION", True), ("SUSPENDED", False), ("RESIGNED", False), ("ACTIVE", True)):
             e.employment_status = status
+            e.separation_date = date(2026, 1, 1) if status == "RESIGNED" else None
             e.save()
             self.assertEqual(e.is_active, active, status)
 

@@ -9,7 +9,7 @@ controlled by environment variables with safe defaults.
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F401,F403
-from .env import env, env_bool, env_list, require_env
+from .env import env, env_bool, env_list, parse_database_url, require_env
 
 # --- Core -----------------------------------------------------------------
 SECRET_KEY = require_env("DJANGO_SECRET_KEY")
@@ -53,15 +53,30 @@ SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 
 # --- Database (PostgreSQL) ------------------------------------------------
+# Either one DATABASE_URL (what hosted providers give you) or the separate DB_* values.
+if env("DATABASE_URL"):
+    _db = parse_database_url(env("DATABASE_URL"))
+else:
+    _db = {"NAME": require_env("DB_NAME"), "USER": require_env("DB_USER"),
+           "PASSWORD": require_env("DB_PASSWORD"), "HOST": require_env("DB_HOST"),
+           "PORT": env("DB_PORT", "5432"), "SSLMODE": None}
+
+# Encrypted connection by default; set DB_SSLMODE=disable only for a database on the
+# same private network (e.g. a local Docker container).
+_sslmode = env("DB_SSLMODE") or _db.pop("SSLMODE") or "require"
+if _sslmode not in ("disable", "allow", "prefer", "require", "verify-ca", "verify-full"):
+    raise ImproperlyConfigured(f"DB_SSLMODE={_sslmode!r} is not a valid PostgreSQL sslmode.")
+_db.pop("SSLMODE", None)
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": require_env("DB_NAME"),
-        "USER": require_env("DB_USER"),
-        "PASSWORD": require_env("DB_PASSWORD"),
-        "HOST": require_env("DB_HOST"),
-        "PORT": env("DB_PORT", "5432"),
+        **_db,
         "CONN_MAX_AGE": int(env("DB_CONN_MAX_AGE", "60")),
+        "CONN_HEALTH_CHECKS": True,  # drop a persistent connection the server has closed
+        # Required when connecting through a transaction pooler such as pgbouncer / Neon's pooler.
+        "DISABLE_SERVER_SIDE_CURSORS": env_bool("DB_DISABLE_SERVER_SIDE_CURSORS", False),
+        "OPTIONS": {"sslmode": _sslmode, "connect_timeout": int(env("DB_CONNECT_TIMEOUT", "10"))},
     }
 }
 

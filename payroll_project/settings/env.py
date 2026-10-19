@@ -27,3 +27,26 @@ def require_env(name):
     if not value:
         raise ImproperlyConfigured(f"Required environment variable {name} is not set.")
     return value
+
+
+def parse_database_url(url):
+    """Turn postgres://user:pass@host:5432/dbname?sslmode=require into Django settings.
+
+    Hosted providers (Neon, Supabase, Render, Railway...) hand out a single URL.
+    """
+    from urllib.parse import parse_qs, unquote, urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("postgres", "postgresql"):
+        raise ImproperlyConfigured("DATABASE_URL must start with postgres:// or postgresql://")
+    name = unquote(parsed.path.lstrip("/"))
+    if not (name and parsed.hostname):
+        raise ImproperlyConfigured("DATABASE_URL must include a host and a database name.")
+    return {
+        "NAME": name,
+        "USER": unquote(parsed.username or ""),
+        "PASSWORD": unquote(parsed.password or ""),
+        "HOST": parsed.hostname,
+        "PORT": str(parsed.port or 5432),
+        "SSLMODE": (parse_qs(parsed.query).get("sslmode") or [None])[0],
+    }
