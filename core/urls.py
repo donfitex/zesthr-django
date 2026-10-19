@@ -20,6 +20,7 @@ urlpatterns = [
     path("employees/<int:pk>/edit/", v.EmployeeUpdate.as_view(), name="employee_edit"),
     path("employees/<int:pk>/delete/", v.EmployeeDelete.as_view(), name="employee_delete"),
     path("employees/<int:pk>/", v.employee_detail, name="employee_detail"),
+    path("me/", v.my_portal, name="my_portal"),
     path("profile/", v.my_profile, name="my_profile"),
     path("profile/edit/", v.my_profile_edit, name="my_profile_edit"),
     path("employees/<int:pk>/deactivate/", v.employee_deactivate, name="employee_deactivate"),

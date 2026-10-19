@@ -64,7 +64,7 @@ def dashboard(request):
 
     # Employee portal
     if not can_see_company and emp_profile:
-        return render(request, "employee_dashboard.html", selectors.employee_snapshot(emp_profile, today))
+        return _employee_portal(request, emp_profile, today)
 
     # Administrator / HR / payroll portal
     if not can_see_company:
@@ -214,6 +214,24 @@ class EmployeeDelete(PermissionRequiredMixin, Base, DeleteView):
 
 
 # ---------- Attendance ----------
+def _employee_portal(request, emp, today):
+    ctx = selectors.employee_snapshot(emp, today)
+    # Notifications may link to a named route or to (route, id); resolve here so templates stay simple.
+    from django.urls import reverse
+    for note in ctx["notifications"]:
+        target = note["url"]
+        note["href"] = (reverse(target[0], args=[target[1]]) if isinstance(target, tuple)
+                        else reverse(target) if target else "")
+    return render(request, "employee_dashboard.html", ctx)
+
+
+@login_required
+def my_portal(request):
+    """The employee view of the dashboard. HR staff who are also employees reach it from here."""
+    emp = require_employee_profile(request.user, active=False)
+    return _employee_portal(request, emp, timezone.localdate())
+
+
 @permission_required(roles.DEACTIVATE_EMPLOYEE)
 def employee_deactivate(request, pk):
     emp = get_object_or_404(Employee, pk=pk)
