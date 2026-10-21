@@ -14,7 +14,7 @@ from django.urls import reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
-from . import roles, selectors
+from . import roles, selectors, timeutil
 from .forms import AttendanceForm, DeactivateEmployeeForm, EmployeeForm, EmployeeSelfForm, LeaveApplicationForm
 from .models import Attendance, AttendanceAudit, Department, Employee, Holiday, LeaveApplication, Salary
 from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
@@ -24,6 +24,7 @@ from .services import employees as employee_service
 from .services import history as history_service
 from .services import leave as leave_service
 from .services import payroll as payroll_service
+from .services import schedules as schedules_service
 
 def period(request):
     """Month/year filter shared by report, attendance log and payroll."""
@@ -215,7 +216,7 @@ class EmployeeDelete(PermissionRequiredMixin, Base, DeleteView):
 
 # ---------- Attendance ----------
 def _employee_portal(request, emp, today):
-    ctx = selectors.employee_snapshot(emp, today)
+    ctx = selectors.employee_snapshot(emp, timeutil.today_for(emp))  # the employee's own local day
     # Notifications may link to a named route or to (route, id); resolve here so templates stay simple.
     from django.urls import reverse
     for note in ctx["notifications"]:
@@ -332,7 +333,8 @@ class AttendanceList(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         p = period(self.request)
-        qs = Attendance.objects.select_related("emp").filter(date__month=p["month"], date__year=p["year"])
+        qs = Attendance.objects.select_related("emp", "emp__work_schedule", "emp__department__work_schedule") \
+            .filter(date__month=p["month"], date__year=p["year"])
         if not self.request.user.has_perm(roles.VIEW_ALL_ATTENDANCE):
             return qs.filter(emp=get_employee_profile(self.request.user))
         emp = self.request.GET.get("emp")
@@ -344,6 +346,9 @@ class AttendanceList(LoginRequiredMixin, ListView):
         can_see_all = self.request.user.has_perm(roles.VIEW_ALL_ATTENDANCE)
         ctx.update(is_staff=can_see_all, emp=self.request.GET.get("emp", ""),
                    employees=Employee.objects.all() if can_see_all else Employee.objects.none())
+        resolver = schedules_service.ScheduleResolver()
+        for rec in ctx["records"]:  # what each day's punches mean under the employee's schedule
+            rec.day = schedules_service.evaluate(rec, resolver.for_employee(rec.emp))
         return ctx
 
 
@@ -412,7 +417,8 @@ def payroll(request):
         return redirect(f"{request.path}?month={p['month']}&year={p['year']}")
     slips = Salary.objects.select_related("emp").filter(month=p["month"], year=p["year"])
     p.update(slips=slips, total=slips.aggregate(t=Sum("net"))["t"] or 0,
-             month_name=calendar.month_name[p["month"]])
+             month_name=calendar.month_name[p["month"]],
+             any_overtime=slips.filter(overtime_pay__gt=0).exists())
     return render(request, "payroll.html", p)
 
 
@@ -426,7 +432,9 @@ def slip(request, pk):
         slips = slips.filter(emp=emp_profile)  # someone else's slip is a 404, not a hint it exists
     s = get_object_or_404(slips, pk=pk)
     counts = payroll_service.attendance_totals(s)
-    return render(request, "slip.html", {"s": s, "c": counts, "month_name": calendar.month_name[s.month]})
+    return render(request, "slip.html", {"s": s, "c": counts, "month_name": calendar.month_name[s.month],
+                                         "basic": s.gross - s.overtime_pay,
+                                         "overtime_text": schedules_service.minutes_text(s.overtime_minutes)})
 
 
 # ---------- Holidays & Leaves ----------

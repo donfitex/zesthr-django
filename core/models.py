@@ -1,8 +1,9 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -10,6 +11,8 @@ from django.utils import timezone
 class Department(models.Model):
     name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=10, unique=True, help_text="Short code, e.g. FIN")
+    work_schedule = models.ForeignKey("WorkSchedule", on_delete=models.PROTECT, null=True, blank=True,
+                                      related_name="departments", help_text="Default schedule for this department")
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -45,10 +48,19 @@ class EmploymentType(models.Model):
         return self.name
 
 
+def validate_time_zone(value):
+    from .timeutil import is_valid_zone
+
+    if value and not is_valid_zone(value):
+        raise ValidationError(f"'{value}' is not a valid time zone name (examples: Africa/Lagos, Asia/Kolkata).")
+
+
 class WorkLocation(models.Model):
     name = models.CharField(max_length=100, unique=True)
     city = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, blank=True)
+    time_zone = models.CharField(max_length=64, blank=True, validators=[validate_time_zone],
+                                 help_text="Leave blank to use the company time zone")
     is_active = models.BooleanField(default=True)
 
     class Meta:
@@ -79,8 +91,24 @@ class WorkSchedule(models.Model):
     name = models.CharField(max_length=100, unique=True)
     start_time = models.TimeField()
     end_time = models.TimeField()
-    break_minutes = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(600)])
-    grace_minutes = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(240)])
+    break_minutes = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(600)],
+                                                     help_text="Unpaid break inside the shift; taken off worked time")
+    grace_minutes = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(240)],
+                                                     help_text="Minutes after the start time before an arrival counts as late")
+    early_leave_grace_minutes = models.PositiveSmallIntegerField(
+        default=0, validators=[MaxValueValidator(240)],
+        help_text="Minutes before the end time that still do not count as leaving early")
+    overtime_eligible = models.BooleanField(default=False, help_text="Employees on this schedule are paid for overtime")
+    overtime_after_minutes = models.PositiveSmallIntegerField(
+        default=30, validators=[MaxValueValidator(480)],
+        help_text="Overtime only counts once the employee stays at least this long after the end time")
+    overtime_max_minutes = models.PositiveSmallIntegerField(
+        default=240, validators=[MaxValueValidator(960)],
+        help_text="Most overtime paid for one day after the shift (0 = no limit). Guards against a forgotten punch-out")
+    overtime_multiplier = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal("1.50"),
+                                              validators=[MinValueValidator(Decimal("1.00"))],
+                                              help_text="Overtime pay rate as a multiple of the normal hourly rate")
+    is_default = models.BooleanField(default=False, help_text="Used for employees whose department has no schedule")
     working_days = models.JSONField(default=default_working_days, validators=[validate_working_days],
                                     help_text="Weekday numbers, 0=Monday ... 6=Sunday")
     is_active = models.BooleanField(default=True)
@@ -88,13 +116,21 @@ class WorkSchedule(models.Model):
     class Meta:
         db_table = "work_schedule"
         ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["is_default"], condition=models.Q(is_default=True),
+                                               name="work_schedule_single_default")]
 
     def __str__(self):
         return f"{self.name} ({self.start_time:%H:%M}-{self.end_time:%H:%M})"
 
+    @property
+    def is_overnight(self):
+        return bool(self.start_time and self.end_time and self.end_time < self.start_time)
+
     def clean(self):
         if self.start_time and self.end_time and self.start_time == self.end_time:
             raise ValidationError("Start and end time cannot be the same.")
+        if self.overtime_max_minutes and self.overtime_max_minutes < self.overtime_after_minutes:
+            raise ValidationError({"overtime_max_minutes": "The daily limit cannot be smaller than the minimum overtime."})
 
 
 class Employee(models.Model):
@@ -218,6 +254,7 @@ class Attendance(models.Model):
     date = models.DateField(default=date.today)
     check_in = models.TimeField(null=True, blank=True)
     check_out = models.TimeField(null=True, blank=True)
+    ends_next_day = models.BooleanField(default=False, help_text="Overnight shift: the check-out is on the day after the date")
     status = models.CharField(max_length=1, choices=STATUS, default="P")
 
     class Meta:
@@ -238,12 +275,20 @@ class Attendance(models.Model):
                 condition=~models.Q(status__in=["A", "L"])
                 | (models.Q(check_in__isnull=True) & models.Q(check_out__isnull=True)),
                 name="att_absent_leave_has_no_punches"),
+            # An overnight shift ends the next day, so its check-out TIME is earlier than the
+            # check-in time (otherwise it would be 24 hours or more).
+            models.CheckConstraint(
+                condition=models.Q(ends_next_day=False)
+                | (models.Q(check_out__isnull=False) & models.Q(check_out__lt=models.F("check_in"))),
+                name="att_overnight_checkout_is_earlier_time"),
         ]
 
     def clean(self):
         """Rules for a single attendance row. Used by forms and the admin; services build valid rows themselves."""
         errors = {}
-        if self.date and self.date > timezone.localdate():
+        from .timeutil import today_for
+
+        if self.date and self.date > (today_for(self.emp) if self.emp_id else timezone.localdate()):
             errors["date"] = "Attendance cannot be recorded for a future date."
         if self.emp_id and self.date:
             if self.date < self.emp.joined_on:
@@ -254,8 +299,13 @@ class Attendance(models.Model):
             errors["status"] = "Absent and Leave records cannot have check-in or check-out times."
         if self.check_out and not self.check_in:
             errors["check_out"] = "A check-out needs a check-in time."
+        elif self.ends_next_day:
+            if not (self.check_in and self.check_out) or self.check_out >= self.check_in:
+                errors["ends_next_day"] = ("An overnight shift needs both times, with the check-out earlier on the "
+                                           "clock than the check-in (e.g. in 22:00, out 06:00 the next day).")
         elif self.check_in and self.check_out and self.check_out <= self.check_in:
-            errors["check_out"] = "Check-out must be after check-in."
+            errors["check_out"] = ("Check-out must be after check-in. For an overnight shift tick "
+                                   "'check-out is on the next day'.")
         if errors:
             raise ValidationError(errors)
 
@@ -263,7 +313,7 @@ class Attendance(models.Model):
     def hours(self):
         if self.check_in and self.check_out:
             a = datetime.combine(self.date, self.check_in)
-            b = datetime.combine(self.date, self.check_out)
+            b = datetime.combine(self.date + timedelta(days=1 if self.ends_next_day else 0), self.check_out)
             return round((b - a).total_seconds() / 3600, 2)
         return None
 
@@ -276,6 +326,8 @@ class Salary(models.Model):
     per_day_pay = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     gross = models.DecimalField(max_digits=10, decimal_places=2)
     deduction = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    overtime_minutes = models.PositiveIntegerField(default=0)
+    overtime_pay = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     net = models.DecimalField(max_digits=10, decimal_places=2)
     generated_on = models.DateTimeField(auto_now=True)
 
@@ -293,6 +345,7 @@ class Salary(models.Model):
             models.CheckConstraint(condition=models.Q(gross__gte=0), name="salary_gross_non_negative"),
             models.CheckConstraint(condition=models.Q(deduction__gte=0), name="salary_deduction_non_negative"),
             models.CheckConstraint(condition=models.Q(net__gte=0), name="salary_net_non_negative"),
+            models.CheckConstraint(condition=models.Q(overtime_pay__gte=0), name="salary_overtime_non_negative"),
         ]
 
 

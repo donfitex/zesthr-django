@@ -9,7 +9,10 @@
   <table><tr><th>Present</th><th>Half days</th><th>Leave</th><th>Absent</th></tr><tr><td>{{ c.present }}</td><td>{{ c.half }}</td><td>{{ c.leave }}</td><td>{{ c.absent }}</td></tr></table>
   <h3>Earnings and deductions</h3>
   <table>
-    <tr><td>Basic salary (gross)</td><td class="r">₹{{ s.gross }}</td></tr>
+    {% if s.overtime_pay %}<tr><td>Basic salary</td><td class="r">₹{{ basic }}</td></tr>
+    <tr><td>Overtime ({{ overtime_text }})</td><td class="r">+ ₹{{ s.overtime_pay }}</td></tr>
+    <tr><td>Gross pay</td><td class="r">₹{{ s.gross }}</td></tr>
+    {% else %}<tr><td>Basic salary (gross)</td><td class="r">₹{{ s.gross }}</td></tr>{% endif %}
     <tr><td>Per-day pay</td><td class="r">₹{{ s.per_day_pay }}</td></tr>
     <tr><td>Absent days</td><td class="r">{{ s.absent_days }}</td></tr>
     <tr><td>Deduction ({{ s.absent_days }} x ₹{{ s.per_day_pay }})</td><td class="r">- ₹{{ s.deduction }}</td></tr>

@@ -198,8 +198,8 @@ class Command(BaseCommand):
         office, _ = WorkLocation.objects.get_or_create(name="Head Office", defaults={"city": "Mumbai", "country": "India"})
         sched, _ = WorkSchedule.objects.get_or_create(
             name="Standard day", defaults={"start_time": time(9, 0), "end_time": time(18, 0), "break_minutes": 60,
-                                           "grace_minutes": 10})
-        full_time = EmploymentType.objects.get(name="Full-time")
+                                           "grace_minutes": 10, "overtime_eligible": True, "is_default": True})
+        full_time, created = EmploymentType.objects.get_or_create(name="Full-time")
         people = list(Employee.objects.filter(user__username__regex=r"^[a-z]+\.[a-z]+$")
                       .exclude(user__username__in=["hr.officer", "payroll.officer"]).order_by("pk"))
         lead = people[0] if people else None

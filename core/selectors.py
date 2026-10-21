@@ -5,6 +5,8 @@ from datetime import date, timedelta
 from django.db.models import Sum
 
 from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
+from .services import schedules
+from .services.attendance import current_record
 
 
 def company_snapshot(today, recent_limit=8):
@@ -40,6 +42,14 @@ def net_payroll_total(month, year):
     return Salary.objects.filter(month=month, year=year).aggregate(t=Sum("net"))["t"] or 0
 
 
+def _with_day_results(emp, records):
+    schedule = schedules.resolve_schedule(emp)
+    records = list(records)
+    for rec in records:
+        rec.day = schedules.evaluate(rec, schedule)
+    return records
+
+
 def punch_state(emp, record):
     """What the punch card should offer: 'inactive', 'marked' (leave/absent set by HR),
     'not_in', 'in' or 'done'."""
@@ -57,13 +67,21 @@ def punch_state(emp, record):
 def month_summary(emp, today):
     """This month's attendance totals, computed from the same records the log shows."""
     records = list(Attendance.objects.filter(emp=emp, date__year=today.year, date__month=today.month))
+    schedule = schedules.resolve_schedule(emp)
     counts = {code: 0 for code in "PHAL"}
-    hours = 0.0
+    hours, late_days, late_minutes, overtime = 0.0, 0, 0, 0
     for r in records:
         counts[r.status] = counts.get(r.status, 0) + 1
         hours += r.hours or 0
+        day = schedules.evaluate(r, schedule)
+        if day:
+            late_days += 1 if day.late_minutes else 0
+            late_minutes += day.late_minutes
+            overtime += day.overtime_minutes
     return {"present": counts["P"], "half": counts["H"], "absent": counts["A"], "leave": counts["L"],
-            "hours": round(hours, 2), "marked_days": len(records)}
+            "hours": round(hours, 2), "marked_days": len(records), "has_schedule": schedule is not None,
+            "late_days": late_days, "late_minutes": late_minutes, "overtime_minutes": overtime,
+            "late_text": schedules.minutes_text(late_minutes), "overtime_text": schedules.minutes_text(overtime)}
 
 
 def leave_taken_this_year(emp, today):
@@ -118,7 +136,7 @@ def employee_notifications(emp, today, limit=6):
 
 def employee_snapshot(emp, today):
     """Everything an employee's own dashboard shows. Only ever reads this employee's rows."""
-    record = Attendance.objects.filter(emp=emp, date=today).first()
+    record = current_record(emp, today)  # today's row, or the open overnight shift from yesterday
     return {
         "emp": emp,
         "today": today,
@@ -126,7 +144,7 @@ def employee_snapshot(emp, today):
         "punch_state": punch_state(emp, record),
         "today_holiday": Holiday.objects.filter(date=today).first(),
         "month": month_summary(emp, today),
-        "recent": Attendance.objects.filter(emp=emp).order_by("-date")[:10],
+        "recent": _with_day_results(emp, Attendance.objects.filter(emp=emp).order_by("-date")[:10]),
         "leaves": LeaveApplication.objects.filter(emp=emp).order_by("-applied_on")[:5],
         "pending_leaves": LeaveApplication.objects.filter(emp=emp, status="PENDING").count(),
         "leave_taken": leave_taken_this_year(emp, today),

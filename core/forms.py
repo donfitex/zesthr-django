@@ -80,8 +80,9 @@ class AttendanceForm(forms.ModelForm):
 
     class Meta:
         model = Attendance
-        fields = ["emp", "date", "status", "check_in", "check_out"]
+        fields = ["emp", "date", "status", "check_in", "check_out", "ends_next_day"]
         widgets = {"date": D, "check_in": T, "check_out": T}
+        labels = {"ends_next_day": "Check-out is on the next day (overnight shift)"}
         labels = {"emp": "Employee"}
 
 

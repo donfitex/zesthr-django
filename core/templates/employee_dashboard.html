@@ -116,6 +116,8 @@
     <div class="stat warn"><span>Absent</span><b>{{ month.absent }}</b></div>
     <div class="stat navy"><span>On leave</span><b>{{ month.leave }}</b></div>
     <div class="stat"><span>Hours worked</span><b>{{ month.hours }}</b></div>
+    {% if month.has_schedule %}<div class="stat warn"><span>Late arrivals</span><b>{{ month.late_days }}</b></div>
+    {% if month.overtime_minutes %}<div class="stat"><span>Overtime</span><b>{{ month.overtime_text }}</b></div>{% endif %}{% endif %}
   </div>
 </section>
 
@@ -129,8 +131,8 @@
       {% for r in recent %}<tr>
         <td><b>{{ r.date|date:"j M Y" }}</b></td><td class="muted">{{ r.date|date:"l" }}</td>
         <td>{{ r.check_in|time:"H:i"|default:"-" }}</td><td>{{ r.check_out|time:"H:i"|default:"-" }}</td>
-        <td>{{ r.hours|default:"-" }}</td>
-        <td><span class="tag {{ r.status }}">{{ r.get_status_display }}</span></td>
+        <td>{{ r.hours|default:"-" }}{% if r.ends_next_day %} <small>(+1 day)</small>{% endif %}</td>
+        <td><span class="tag {{ r.status }}">{{ r.get_status_display }}</span>{% if r.day.late_minutes %} <span class="tag H">Late {{ r.day.late_text }}</span>{% endif %}{% if r.day.overtime_minutes %} <span class="tag P">OT {{ r.day.overtime_text }}</span>{% endif %}</td>
       </tr>{% endfor %}
       </tbody>
     </table></div>

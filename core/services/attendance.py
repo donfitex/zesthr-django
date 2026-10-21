@@ -18,10 +18,13 @@ two simultaneous requests can never both succeed):
 Every change writes an AttendanceAudit row in the same transaction.
 Corrections of any other kind go through the edit form, which requires a reason.
 """
-from django.db import transaction
-from django.utils import timezone
+from datetime import timedelta
 
+from django.db import transaction
+
+from .. import timeutil
 from ..models import Attendance, AttendanceAudit
+from .schedules import resolve_schedule
 
 MARKABLE_STATUSES = ("A", "H", "L")  # statuses HR may set explicitly
 
@@ -34,17 +37,14 @@ class AttendanceError(Exception):
         self.code = code
 
 
-def _now_time():
-    return timezone.localtime().time().replace(microsecond=0)
-
-
 def snapshot(rec):
     """The fields that matter, as plain JSON-safe values."""
     if rec is None:
         return None
     return {"status": rec.status,
             "check_in": rec.check_in.isoformat() if rec.check_in else None,
-            "check_out": rec.check_out.isoformat() if rec.check_out else None}
+            "check_out": rec.check_out.isoformat() if rec.check_out else None,
+            "ends_next_day": rec.ends_next_day}
 
 
 def record_audit(action, rec, before, *, by=None, reason="", day=None, emp=None, deleted=False):
@@ -62,7 +62,7 @@ def _require_active(emp):
 @transaction.atomic
 def check_in(emp, *, now=None, today=None, by=None):
     _require_active(emp)
-    day, moment = today or timezone.localdate(), now or _now_time()
+    day, moment = today or timeutil.today_for(emp), now or timeutil.time_for(emp)
     rec, created = Attendance.objects.select_for_update().get_or_create(
         emp=emp, date=day, defaults={"status": "P", "check_in": moment})
     if created:
@@ -82,19 +82,51 @@ def check_in(emp, *, now=None, today=None, by=None):
     return rec
 
 
+def current_record(emp, today):
+    """The record a punch card should show: today's, or the open shift that started yesterday
+    when the employee works overnight shifts."""
+    rec = Attendance.objects.filter(emp=emp, date=today).first()
+    if rec and rec.check_in and not rec.check_out:
+        return rec
+    schedule = resolve_schedule(emp)
+    if schedule and schedule.is_overnight:
+        prev = Attendance.objects.filter(emp=emp, date=today - timedelta(days=1), check_in__isnull=False,
+                                         check_out__isnull=True, status__in=["P", "H"]).first()
+        if prev:
+            return prev
+    return rec
+
+
 @transaction.atomic
 def check_out(emp, *, now=None, today=None, by=None):
     _require_active(emp)
-    day, moment = today or timezone.localdate(), now or _now_time()
+    day, moment = today or timeutil.today_for(emp), now or timeutil.time_for(emp)
     rec = Attendance.objects.select_for_update().filter(emp=emp, date=day).first()
-    if rec is None or not rec.check_in:
+    open_today = rec is not None and rec.check_in is not None and rec.check_out is None
+
+    if not open_today:
+        # Overnight shift: the employee clocked in yesterday evening and leaves this morning.
+        schedule = resolve_schedule(emp)
+        if schedule and schedule.is_overnight:
+            prev = Attendance.objects.select_for_update().filter(
+                emp=emp, date=day - timedelta(days=1), check_in__isnull=False, check_out__isnull=True,
+                status__in=["P", "H"]).first()
+            if prev:
+                if moment >= prev.check_in:
+                    raise AttendanceError("invalid_time", "That shift would be 24 hours or longer. Ask HR to correct it.")
+                before = snapshot(prev)
+                prev.check_out, prev.ends_next_day = moment, True
+                prev.save()
+                record_audit(AttendanceAudit.CHECK_OUT, prev, before, by=by)
+                return prev
+        if rec is not None and rec.check_out:
+            raise AttendanceError("already_checked_out", f"Already punched out today at {rec.check_out:%H:%M}.")
         hint = ""
         if Attendance.objects.filter(emp=emp, date__lt=day, check_in__isnull=False, check_out__isnull=True,
-                                     status__in=["P", "H"]).order_by("-date").exists():
+                                     status__in=["P", "H"]).exists():
             hint = " You also have an earlier day without a check-out; ask HR to correct it."
         raise AttendanceError("not_checked_in", "You have not punched in today, so there is nothing to punch out of." + hint)
-    if rec.check_out:
-        raise AttendanceError("already_checked_out", f"Already punched out today at {rec.check_out:%H:%M}.")
+
     if moment <= rec.check_in:
         raise AttendanceError("invalid_time", "The check-out time must be later than the check-in time "
                                               f"({rec.check_in:%H:%M}). Check the device clock.")
@@ -110,7 +142,7 @@ def mark_status(emp, status, *, today=None, by=None, reason=""):
     """HR sets today's status to Absent / Half day / Leave."""
     if status not in MARKABLE_STATUSES:
         raise ValueError(f"Unsupported attendance status: {status!r}")
-    day = today or timezone.localdate()
+    day = today or timeutil.today_for(emp)
     rec, created = Attendance.objects.select_for_update().get_or_create(emp=emp, date=day, defaults={"status": status})
     if created:
         record_audit(AttendanceAudit.SET_STATUS, rec, None, by=by, reason=reason)
@@ -126,6 +158,7 @@ def mark_status(emp, status, *, today=None, by=None, reason=""):
     rec.status = status
     if status in ("A", "L"):
         rec.check_in = rec.check_out = None
+        rec.ends_next_day = False
     rec.save()
     record_audit(AttendanceAudit.SET_STATUS, rec, before, by=by, reason=reason)
     return rec
