@@ -49,7 +49,7 @@ def punch_state(emp, record):
         return "done"
     if record and record.check_in:
         return "in"
-    if record and record.status in ("A", "L"):
+    if record and record.status in ("A", "L", "H"):
         return "marked"
     return "not_in"
 

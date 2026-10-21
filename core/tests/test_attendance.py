@@ -28,7 +28,7 @@ class AttendanceServiceTests(TestCase):
     def test_absent_and_leave_clear_punch_times_but_half_day_keeps_them(self):
         svc.check_in(self.emp, now=time(9, 0), today=TODAY)
         self.assertEqual(svc.mark_status(self.emp, "H", today=TODAY).check_in, time(9, 0))
-        rec = svc.mark_status(self.emp, "A", today=TODAY)
+        rec = svc.mark_status(self.emp, "A", today=TODAY, reason="did not actually attend")
         self.assertEqual((rec.status, rec.check_in, rec.check_out), ("A", None, None))
         self.assertEqual(svc.mark_status(self.emp, "L", today=TODAY).status, "L")
 

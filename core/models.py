@@ -231,6 +231,33 @@ class Attendance(models.Model):
         # (emp, date) is already indexed by the unique constraint; this serves the
         # "everyone on a given day" queries (registers, dashboards).
         indexes = [models.Index(fields=["date", "status"], name="att_date_status_idx")]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(check_out__isnull=True) | models.Q(check_in__isnull=False),
+                                   name="att_checkout_needs_checkin"),
+            models.CheckConstraint(
+                condition=~models.Q(status__in=["A", "L"])
+                | (models.Q(check_in__isnull=True) & models.Q(check_out__isnull=True)),
+                name="att_absent_leave_has_no_punches"),
+        ]
+
+    def clean(self):
+        """Rules for a single attendance row. Used by forms and the admin; services build valid rows themselves."""
+        errors = {}
+        if self.date and self.date > timezone.localdate():
+            errors["date"] = "Attendance cannot be recorded for a future date."
+        if self.emp_id and self.date:
+            if self.date < self.emp.joined_on:
+                errors["date"] = f"{self.emp.name} joined on {self.emp.joined_on}; earlier dates are not valid."
+            elif self.emp.separation_date and self.date > self.emp.separation_date:
+                errors["date"] = f"{self.emp.name} left on {self.emp.separation_date}; later dates are not valid."
+        if self.status in ("A", "L") and (self.check_in or self.check_out):
+            errors["status"] = "Absent and Leave records cannot have check-in or check-out times."
+        if self.check_out and not self.check_in:
+            errors["check_out"] = "A check-out needs a check-in time."
+        elif self.check_in and self.check_out and self.check_out <= self.check_in:
+            errors["check_out"] = "Check-out must be after check-in."
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def hours(self):
@@ -410,4 +437,42 @@ class EmploymentHistory(models.Model):
     def save(self, *args, **kwargs):
         if not self._state.adding:
             raise ValidationError("Employment history cannot be modified.")
+        super().save(*args, **kwargs)
+
+
+class AttendanceAudit(models.Model):
+    """Append-only trail of every attendance change: what it was, what it became, who and why.
+
+    Survives deletion of the attendance row (record_id and date are copied), and the
+    employee cannot be deleted while any audit rows exist.
+    """
+
+    CHECK_IN, CHECK_OUT, SET_STATUS = "CHECK_IN", "CHECK_OUT", "SET_STATUS"
+    MANUAL_CREATE, MANUAL_EDIT, MANUAL_DELETE = "MANUAL_CREATE", "MANUAL_EDIT", "MANUAL_DELETE"
+    ACTIONS = [(CHECK_IN, "Checked in"), (CHECK_OUT, "Checked out"), (SET_STATUS, "Status set"),
+               (MANUAL_CREATE, "Entry added"), (MANUAL_EDIT, "Entry corrected"), (MANUAL_DELETE, "Entry deleted")]
+
+    emp = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="attendance_audit")
+    date = models.DateField()
+    attendance = models.ForeignKey(Attendance, on_delete=models.SET_NULL, null=True, blank=True, related_name="audit")
+    record_id = models.PositiveIntegerField(null=True, blank=True)
+    action = models.CharField(max_length=15, choices=ACTIONS)
+    old_values = models.JSONField(null=True, blank=True)
+    new_values = models.JSONField(null=True, blank=True)
+    reason = models.CharField(max_length=255, blank=True)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "attendance_audit"
+        ordering = ["-created_at", "-id"]
+        permissions = [("view_attendance_audit", "Can view the attendance change history")]
+        indexes = [models.Index(fields=["emp", "date"], name="attaudit_emp_date_idx")]
+
+    def __str__(self):
+        return f"{self.get_action_display()}: {self.emp_id} {self.date}"
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError("Attendance history cannot be modified.")
         super().save(*args, **kwargs)

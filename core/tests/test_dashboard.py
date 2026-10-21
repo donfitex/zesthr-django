@@ -182,6 +182,7 @@ class DashboardPageTests(BaseTest):
         self.client.post(reverse("attendance_today"), {"action": "check_in"})
         html = self.client.get(reverse("dashboard")).content.decode()
         self.assertEqual((disabled(html, "check_in"), disabled(html, "check_out")), (True, False))
+        Attendance.objects.filter(emp=self.alice, date=timezone.localdate()).update(check_in=time(0, 0))  # a real gap
         self.client.post(reverse("attendance_today"), {"action": "check_out"})
         html = self.client.get(reverse("dashboard")).content.decode()
         self.assertEqual((disabled(html, "check_in"), disabled(html, "check_out")), (True, True))

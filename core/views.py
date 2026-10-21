@@ -16,7 +16,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from . import roles, selectors
 from .forms import AttendanceForm, DeactivateEmployeeForm, EmployeeForm, EmployeeSelfForm, LeaveApplicationForm
-from .models import Attendance, Department, Employee, Holiday, LeaveApplication, Salary
+from .models import Attendance, AttendanceAudit, Department, Employee, Holiday, LeaveApplication, Salary
 from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
                           require_employee_profile, require_perm)
 from .services import attendance as attendance_service
@@ -287,18 +287,22 @@ def attendance_today(request):
         if action in attendance_service.MARKABLE_STATUSES and not can_mark_others:
             raise PermissionDenied
 
-        if action == "check_in":
-            rec = attendance_service.check_in(emp)
-            messages.success(request, f"Punched IN at {rec.check_in.strftime('%I:%M %p')}.")
-        elif action == "check_out":
-            rec = attendance_service.check_out(emp)
-            messages.success(request, f"Punched OUT at {rec.check_out.strftime('%I:%M %p')}.")
-        elif action in attendance_service.MARKABLE_STATUSES:
-            rec = attendance_service.mark_status(emp, action)
-            messages.success(request, f"{emp.name}: status marked as {rec.get_status_display()}.")
-        else:
-            # Unknown action: change nothing (it used to create a "Present" record).
-            messages.error(request, "Unknown attendance action.")
+        reason = request.POST.get("reason", "")
+        try:
+            if action == "check_in":
+                rec = attendance_service.check_in(emp, by=request.user)
+                messages.success(request, f"Punched IN at {rec.check_in.strftime('%I:%M %p')}.")
+            elif action == "check_out":
+                rec = attendance_service.check_out(emp, by=request.user)
+                messages.success(request, f"Punched OUT at {rec.check_out.strftime('%I:%M %p')}.")
+            elif action in attendance_service.MARKABLE_STATUSES:
+                rec = attendance_service.mark_status(emp, action, by=request.user, reason=reason)
+                messages.success(request, f"{emp.name}: status marked as {rec.get_status_display()}.")
+            else:
+                # Unknown action: change nothing (it used to create a "Present" record).
+                messages.error(request, "Unknown attendance action.")
+        except attendance_service.AttendanceError as exc:
+            messages.error(request, str(exc))
 
         if not can_mark_others:
             return redirect("dashboard")
@@ -348,17 +352,44 @@ class AttendanceCreate(PermissionRequiredMixin, Base, CreateView):
     model, form_class, title = Attendance, AttendanceForm, "Add attendance entry"
     success_url, success_message = reverse_lazy("attendance_list"), "Attendance saved."
 
+    def form_valid(self, form):
+        with transaction.atomic():
+            response = super().form_valid(form)
+            attendance_service.record_manual_change(AttendanceAudit.MANUAL_CREATE, self.object, None,
+                                                    by=self.request.user, reason=form.cleaned_data["reason"])
+        return response
+
 
 class AttendanceUpdate(PermissionRequiredMixin, Base, UpdateView):
     permission_required = roles.CHANGE_ATTENDANCE
     model, form_class, title = Attendance, AttendanceForm, "Edit attendance entry"
     success_url, success_message = reverse_lazy("attendance_list"), "Attendance updated."
 
+    def form_valid(self, form):
+        # The in-memory object already carries the form's values; the original is what the database holds.
+        before = attendance_service.snapshot(Attendance.objects.get(pk=self.object.pk))
+        with transaction.atomic():
+            response = super().form_valid(form)
+            attendance_service.record_manual_change(AttendanceAudit.MANUAL_EDIT, self.object, before,
+                                                    by=self.request.user, reason=form.cleaned_data["reason"])
+        return response
+
 
 class AttendanceDelete(PermissionRequiredMixin, Base, DeleteView):
     permission_required = roles.DELETE_ATTENDANCE
-    model, title, template_name = Attendance, "Delete attendance entry", "confirm_delete.html"
+    model, title, template_name = Attendance, "Delete attendance entry", "attendance_confirm_delete.html"
     success_url, success_message = reverse_lazy("attendance_list"), "Entry deleted."
+
+    def form_valid(self, form):
+        reason = self.request.POST.get("reason", "").strip()
+        if not reason:
+            return self.render_to_response(self.get_context_data(form=form, reason_error=True))
+        rec = self.object
+        with transaction.atomic():
+            attendance_service.record_manual_change(
+                AttendanceAudit.MANUAL_DELETE, rec, attendance_service.snapshot(rec), by=self.request.user,
+                reason=reason, deleted=True, day=rec.date, emp=rec.emp)
+            return super().form_valid(form)
 
 
 # ---------- Reports & payroll ----------

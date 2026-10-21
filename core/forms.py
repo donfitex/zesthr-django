@@ -74,6 +74,10 @@ class DeactivateEmployeeForm(forms.Form):
 
 
 class AttendanceForm(forms.ModelForm):
+    """Manual entry / correction by HR. A reason is mandatory and goes into the audit history."""
+
+    reason = forms.CharField(max_length=255, help_text="Why is this entry being added or corrected? (kept in the history)")
+
     class Meta:
         model = Attendance
         fields = ["emp", "date", "status", "check_in", "check_out"]

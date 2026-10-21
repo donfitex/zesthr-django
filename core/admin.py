@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 
 from . import roles
 from .services import accounts
-from .models import (SecurityEvent, Attendance, Department, Employee, EmploymentType, JobPosition, Salary, WorkLocation,
+from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Employee, EmploymentType, JobPosition, Salary, WorkLocation,
                      WorkSchedule)
 
 
@@ -50,7 +50,45 @@ class EmployeeAdmin(admin.ModelAdmin):
 
 for model in (Department, JobPosition, EmploymentType, WorkLocation, WorkSchedule):
     admin.site.register(model)
-admin.site.register(Attendance)
+
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    """Read-only here: every change must go through the app, which demands a reason and keeps history."""
+
+    list_display = ("emp", "date", "status", "check_in", "check_out")
+    list_filter = ("status",)
+    date_hierarchy = "date"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AttendanceAudit)
+class AttendanceAuditAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "emp", "date", "action", "reason", "changed_by")
+    list_filter = ("action",)
+    search_fields = ("emp__name", "reason")
+    date_hierarchy = "created_at"
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm(roles.VIEW_ATTENDANCE_AUDIT)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 admin.site.register(Salary)
 
 
