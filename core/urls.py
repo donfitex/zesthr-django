@@ -37,4 +37,10 @@ urlpatterns = [
     path("leaves/", v.leaves_list, name="leaves_list"),
     path("leaves/apply/", v.leave_apply, name="leave_apply"),
     path("leaves/<int:pk>/action/", v.leave_action, name="leave_action"),
+    path('admin-dashboard/attendance/', v.admin_attendance_dashboard, name='admin_attendance_dashboard'),
+    path('admin-dashboard/corrections/', v.review_corrections_queue, name='review_corrections_queue'),
+    path('admin-dashboard/attendance/', v.admin_attendance_dashboard, name='admin_attendance_dashboard'),
+    path('admin-dashboard/attendance/bulk/', v.bulk_attendance_entry, name='bulk_attendance_entry'),
+    path('admin-dashboard/attendance/corrections/', v.review_corrections_queue, name='review_corrections_queue'),
+    path('admin-dashboard/attendance/reports/', v.attendance_anomaly_reports, name='attendance_anomaly_reports'),
 ]

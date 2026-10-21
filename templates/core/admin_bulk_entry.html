@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Bulk Attendance Processing - HROS{% endblock %}
+{% block content %}
+<div style="padding: 2rem; max-width: 800px; margin: 0 auto;">
+    <h1 style="font-size: 1.5rem; color: #333; margin-bottom: 0.5rem;">Bulk Attendance Register</h1>
+    <p style="color: #666; margin-bottom: 2rem;">Batch insert or override shift cards for corporate work branches.</p>
+
+    <form method="post" style="background: #fff; padding: 2rem; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+        {% csrf_data %}
+        {% csrf_token %}
+        
+        {% if form.non_field_errors %}
+            <div style="background-color: #fdf2f2; color: #9b1c1c; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem;">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #444;">Target Processing Date</label>
+            {{ form.date }}
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #444;">Shift Stamps (Optional)</label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                <div>
+                    <span style="font-size: 0.8rem; color: #666;">Clock In</span>
+                    {{ form.check_in }}
+                </div>
+                <div>
+                    <span style="font-size: 0.8rem; color: #666;">Clock Out</span>
+                    {{ form.check_out }}
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #444;">Audit Log Reason / Notes</label>
+            {{ form.reason }}
+        </div>
+
+        <div style="margin-bottom: 2rem;">
+            <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #444;">Select Personnel Assignments</label>
+            <div style="max-height: 250px; overflow-y: auto; border: 1px solid #ccc; padding: 1rem; border-radius: 4px; background: #fafafa;">
+                {{ form.employees }}
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+            <a href="{% url 'admin_attendance_dashboard' %}" style="padding: 0.5rem 1rem; border: 1px solid #ccc; border-radius: 4px; text-decoration: none; color: #333; font-weight: 600;">Cancel</a>
+            <button type="submit" style="padding: 0.5rem 1.5rem; background: #28a745; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer;">Commit Registry Entries</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
