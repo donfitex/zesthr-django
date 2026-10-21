@@ -23,7 +23,7 @@ from datetime import timedelta
 from django.db import transaction
 
 from .. import timeutil
-from ..models import Attendance, AttendanceAudit
+from ..models import Attendance, AttendanceAudit, AttendanceCorrectionRequest, Employee
 from .schedules import resolve_schedule
 
 MARKABLE_STATUSES = ("A", "H", "L")  # statuses HR may set explicitly
@@ -169,3 +169,61 @@ def record_manual_change(action, rec, before, *, by, reason, deleted=False, day=
     if action == AttendanceAudit.MANUAL_EDIT and before == snapshot(rec) and not deleted:
         return None  # saved without changing anything: nothing to record
     return record_audit(action, rec, before, by=by, reason=reason, deleted=deleted, day=day, emp=emp)
+
+@transaction.atomic
+def submit_bulk_attendance(employee_ids, date, check_in_time=None, check_out_time=None, author_user=None, reason="Bulk Entry"):
+    """
+    Creates or updates basic attendance sheets for an entire list of employees at once.
+    """
+    records_updated = 0
+    for emp_id in employee_ids:
+        try:
+            employee = Employee.objects.get(id=emp_id)
+            # Create or update standard daily attendance placeholder
+            attendance, created = Attendance.objects.get_or_create(
+                employee=employee,
+                date=date,
+                defaults={'check_in': check_in_time, 'check_out': check_out_time, 'notes': reason}
+            )
+            if not created:
+                if check_in_time: attendance.check_in = check_in_time
+                if check_out_time: attendance.check_out = check_out_time
+                attendance.notes = f"{attendance.notes} | Updated via bulk: {reason}"
+                attendance.save()
+            records_updated += 1
+        except Employee.DoesNotExist:
+            continue
+    return records_updated
+
+@transaction.atomic
+def process_correction_request(request_id, status, manager_user, review_notes=""):
+    """
+    Handles transition rules for correction requests. If approved, applies directly
+    to the target employee's core attendance card.
+    """
+    correction = AttendanceCorrectionRequest.objects.select_for_update().get(id=request_id)
+    
+    if correction.status != 'PENDING':
+        raise ValueError("This request has already been processed.")
+        
+    correction.status = status
+    correction.reviewed_by = manager_user
+    correction.review_notes = review_notes
+    correction.save()
+    
+    if status == 'APPROVED':
+        # Apply edits downstream directly onto core Attendance logging
+        attendance, created = Attendance.objects.get_or_create(
+            employee=correction.employee,
+            date=correction.attendance_date
+        )
+        if correction.requested_check_in:
+            attendance.check_in = correction.requested_check_in
+        if correction.requested_check_out:
+            attendance.check_out = correction.requested_check_out
+            
+        audit_trail_text = f"Corrected by Manager Review. Reason: {correction.reason}"
+        attendance.notes = f"{attendance.notes} | {audit_trail_text}" if attendance.notes else audit_trail_text
+        attendance.save()
+        
+    return correction

@@ -16,7 +16,7 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from . import roles, selectors, timeutil
 from .forms import AttendanceForm, DeactivateEmployeeForm, EmployeeForm, EmployeeSelfForm, LeaveApplicationForm
-from .models import Attendance, AttendanceAudit, Department, Employee, Holiday, LeaveApplication, Salary
+from .models import Attendance, AttendanceAudit, Department, Employee, Holiday, LeaveApplication, Salary, AttendanceCorrectionRequest
 from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
                           require_employee_profile, require_perm)
 from .services import attendance as attendance_service
@@ -25,6 +25,10 @@ from .services import history as history_service
 from .services import leave as leave_service
 from .services import payroll as payroll_service
 from .services import schedules as schedules_service
+
+
+from core.selectors import get_filtered_attendance, get_missing_punch_report, get_attendance_exceptions_report
+from core.services.attendance import submit_bulk_attendance, process_correction_request
 
 def period(request):
     """Month/year filter shared by report, attendance log and payroll."""
@@ -530,3 +534,51 @@ def leave_action(request, pk):
             messages.info(request, f"Leave application for {leave.emp.name} rejected.")
 
     return redirect("leaves_list")
+
+@login_required
+@permission_required('core.view_attendance') # Removed raise_exception
+def admin_attendance_dashboard(request):
+    """
+    Master registry grid with interactive search combinations.
+    """
+    # Alternative: if you strictly want a 403 instead of a login redirect:
+    # if not request.user.has_perm('core.view_attendance'):
+    #     raise PermissionDenied
+        
+    filters = {
+        'employee_id': request.GET.get('employee'),
+        'department_id': request.GET.get('department'),
+        'start_date': request.GET.get('start_date'),
+        'end_date': request.GET.get('end_date'),
+    }
+    
+    context = {
+        'attendance_records': get_filtered_attendance(filters),
+        'departments': Department.objects.all(),
+        'employees': Employee.objects.filter(is_active=True),
+        'selected_filters': filters
+    }
+    return render(request, 'core/admin_attendance_list.html', context)
+
+@login_required
+@permission_required('core.can_review_corrections') # Removed raise_exception
+def review_corrections_queue(request):
+    """
+    Unified manager hub for confirming or rejecting historical changes.
+    """
+    if request.method == 'POST':
+        req_id = request.POST.get('request_id')
+        action = request.POST.get('action') # 'APPROVED' or 'REJECTED'
+        notes = request.POST.get('review_notes', '')
+        
+        try:
+            process_correction_request(req_id, action, request.user, notes)
+        except ValueError as e:
+            # Handle cleanly if already edited concurrently
+            pass
+        return redirect('review_corrections_queue')
+
+    context = {
+        'pending_requests': AttendanceCorrectionRequest.objects.filter(status='PENDING').select_related('employee')
+    }
+    return render(request, 'core/admin_corrections_queue.html', context)
