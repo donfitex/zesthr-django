@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Attendance Administration - HROS{% endblock %}
+
+{% block content %}
+<div class="admin-container" style="padding: 2rem; max-width: 1200px; margin: 0 auto;">
+    
+    <!-- Header Block -->
+    <div class="admin-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <div>
+            <h1 style="margin: 0; font-size: 1.75rem; color: #333;">Attendance Administration</h1>
+            <p style="margin: 0.25rem 0 0 0; color: #666;">Manage corporate daily registers and transition workflows.</p>
+        </div>
+        <div class="admin-actions">
+            <!-- Placeholder link to Bulk Input UI or Correction Queues -->
+            <a href="{% url 'review_corrections_queue' %}" class="btn btn-secondary" style="padding: 0.5rem 1rem; background-color: #6c757d; color: #fff; border-radius: 4px; text-decoration: none; font-size: 0.9rem; margin-right: 0.5rem;">
+                Review Corrections Queue
+            </a>
+        </div>
+    </div>
+
+    <!-- Multi-Filter Control Panel (Task 3 & Task 4) -->
+    <div class="filter-card" style="background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+        <h2 style="font-size: 1.1rem; margin-top: 0; margin-bottom: 1rem; color: #444;">Search & Filtering Options</h2>
+        <form method="get" action="" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; align-items: end;">
+            
+            <!-- Employee Selector -->
+            <div>
+                <label for="employee" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #555;">Employee</label>
+                <select name="employee" id="employee" style="width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">-- All Employees --</option>
+                    {% for emp in employees %}
+                        <option value="{{ emp.id }}" {% if selected_filters.employee_id == emp.id|stringformat:"s" %}selected{% endif %}>
+                            {{ emp.last_name }}, {{ emp.first_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Department Selector -->
+            <div>
+                <label for="department" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #555;">Department</label>
+                <select name="department" id="department" style="width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;">
+                    <option value="">-- All Departments --</option>
+                    {% for dept in departments %}
+                        <option value="{{ dept.id }}" {% if selected_filters.department_id == dept.id|stringformat:"s" %}selected{% endif %}>
+                            {{ dept.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Start Date Control Window -->
+            <div>
+                <label for="start_date" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #555;">Start Date</label>
+                <input type="date" name="start_date" id="start_date" value="{{ selected_filters.start_date|default:'' }}" style="width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+
+            <!-- End Date Control Window -->
+            <div>
+                <label for="end_date" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.4rem; color: #555;">End Date</label>
+                <input type="date" name="end_date" id="end_date" value="{{ selected_filters.end_date|default:'' }}" style="width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+
+            <!-- Interactivity Buttons -->
+            <div style="display: flex; gap: 0.5rem;">
+                <button type="submit" style="flex: 1; padding: 0.45rem; background-color: #007bff; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer;">
+                    Apply Filters
+                </button>
+                <a href="{% url 'admin_attendance_dashboard' %}" style="padding: 0.45rem; background-color: #f8f9fa; color: #333; border: 1px solid #ccc; border-radius: 4px; text-decoration: none; text-align: center; font-size: 0.9rem;">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Daily Register Table Grid (Task 1) -->
+    <div class="register-card" style="background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem;">
+            <thead>
+                <tr style="background-color: #f8f9fa; border-bottom: 2px solid #e0e0e0; color: #555;">
+                    <th style="padding: 1rem;">Date</th>
+                    <th style="padding: 1rem;">Employee</th>
+                    <th style="padding: 1rem;">Department</th>
+                    <th style="padding: 1rem;">Clock In</th>
+                    <th style="padding: 1rem;">Clock Out</th>
+                    <th style="padding: 1rem;">Operational Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in attendance_records %}
+                    <tr style="border-bottom: 1px solid #eee; color: #333;">
+                        <td style="padding: 1rem; font-weight: 600;">{{ record.date }}</td>
+                        <td style="padding: 1rem;">{{ record.employee.last_name }}, {{ record.employee.first_name }}</td>
+                        <td style="padding: 1rem;">{{ record.employee.department.name|default:"-" }}</td>
+                        <td style="padding: 1rem;">
+                            {% if record.check_in %}
+                                <span style="background-color: #e2f0d9; color: #385723; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
+                                    {{ record.check_in|date:"H:i" }}
+                                </span>
+                            {% else %}
+                                <span style="color: #c00000; font-style: italic;">Missing</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 1rem;">
+                            {% if record.check_out %}
+                                <span style="background-color: #e2f0d9; color: #385723; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.85rem;">
+                                    {{ record.check_out|date:"H:i" }}
+                                </span>
+                            {% else %}
+                                <span style="color: #c00000; font-style: italic;">Missing</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 1rem; color: #666; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{{ record.notes }}">
+                            {{ record.notes|default:"--" }}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" style="padding: 3rem; text-align: center; color: #888; font-style: italic;">
+                            No daily attendance registry entries match your active filter scope.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}

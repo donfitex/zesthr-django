@@ -7,6 +7,7 @@ from django.db.models import Q
 from .models import Attendance, Employee, LeaveApplication
 from .services.leave import validate_leave_request
 
+
 D = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
 T = forms.TimeInput(attrs={"type": "time"}, format="%H:%M")
 
@@ -107,3 +108,34 @@ class LeaveApplicationForm(forms.ModelForm):
                                cleaned.get("start_date"), cleaned.get("end_date"))
         return cleaned
 
+class BulkAttendanceForm(forms.Form):
+    date = forms.DateField(
+        widget=forms.DateInput(attrs={'type': 'date', 'style': 'width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;'})
+    )
+    employees = forms.ModelMultipleChoiceField(
+        queryset=Employee.objects.filter(is_active=True),
+        widget=forms.CheckboxSelectMultiple(attrs={'class': 'employee-checkbox'}),
+        help_text="Select all employees applicable to this attendance batch."
+    )
+    check_in = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={'type': 'time', 'style': 'width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;'})
+    )
+    check_out = forms.TimeField(
+        required=False,
+        widget=forms.TimeInput(attrs={'type': 'time', 'style': 'width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;'})
+    )
+    reason = forms.CharField(
+        max_length=255,
+        initial="Bulk Administrative Entry",
+        widget=forms.TextInput(attrs={'style': 'width: 100%; padding: 0.4rem; border: 1px solid #ccc; border-radius: 4px;'})
+    )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        check_in = cleaned_data.get('check_in')
+        check_out = cleaned_data.get('check_out')
+
+        if check_in and check_out and check_out <= check_in:
+            raise forms.ValidationError("Clock-out time must occur strictly after the clock-in timestamp.")
+        return cleaned_data
