@@ -49,6 +49,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "core.context_processors.review_flags",
             ]
         },
     }
@@ -79,6 +80,9 @@ SESSION_IDLE_MINUTES = int(env("DJANGO_SESSION_IDLE_MINUTES", "60"))
 SESSION_COOKIE_AGE = SESSION_IDLE_MINUTES * 60
 SESSION_SAVE_EVERY_REQUEST = True
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# --- Attendance corrections: how far back an employee may ask for a fix ----
+CORRECTION_WINDOW_DAYS = int(env("DJANGO_CORRECTION_WINDOW_DAYS", "30"))
 
 # --- Password reset and sign-in protection ---------------------------------
 PASSWORD_RESET_TIMEOUT = int(env("DJANGO_PASSWORD_RESET_MINUTES", "60")) * 60  # reset links expire

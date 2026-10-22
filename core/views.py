@@ -1,62 +1,37 @@
 import calendar
+from datetime import date, timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.core.exceptions import PermissionDenied
-from django.db.models import Q, ProtectedError, Sum
+from django.db.models import ProtectedError, Q, Sum
 from django.http import Http404
-from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils import timezone
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from . import roles, selectors, timeutil
-from .forms import AttendanceForm, DeactivateEmployeeForm, EmployeeForm, EmployeeSelfForm, LeaveApplicationForm
-from .models import Attendance, AttendanceAudit, Department, Employee, Holiday, LeaveApplication, Salary
+from .forms import (AttendanceForm, BulkAttendanceForm, CorrectionRequestForm, DeactivateEmployeeForm, EmployeeForm,
+                    EmployeeSelfForm, LeaveApplicationForm)
+from .models import (Attendance, AttendanceAudit, AttendanceCorrectionRequest, Department, Employee, Holiday,
+                     LeaveApplication, Salary)
 from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
                           require_employee_profile, require_perm)
 from .services import attendance as attendance_service
+from .services import corrections as corrections_service
+from .services import exceptions as exceptions_service
 from .services import employees as employee_service
 from .services import history as history_service
 from .services import leave as leave_service
 from .services import payroll as payroll_service
 from .services import schedules as schedules_service
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-from core.selectors import get_filtered_attendance, get_missing_punch_report, get_attendance_exceptions_report
-from core.services.attendance import submit_bulk_attendance, process_correction_request
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-from datetime import datetime
-from core.forms import BulkAttendanceForm
-
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of 06a673d (feat: 1. Bulk Attendance Entry Form & View, Manager Correction Queue HTML Layout,  Attendance Tracking, Missing-Punch, & Exception Reports)
-=======
->>>>>>> parent of 06a673d (feat: 1. Bulk Attendance Entry Form & View, Manager Correction Queue HTML Layout,  Attendance Tracking, Missing-Punch, & Exception Reports)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
 def period(request):
     """Month/year filter shared by report, attendance log and payroll."""
     today = timezone.localdate()
@@ -106,6 +81,8 @@ def dashboard(request):
     # None means "not permitted": the template hides the tile.
     ctx["pending_leaves"] = (selectors.pending_leave_count()
                              if request.user.has_perm(roles.VIEW_ALL_LEAVES) else None)
+    ctx["pending_corrections"] = (AttendanceCorrectionRequest.objects.filter(status="PENDING").count()
+                                  if request.user.has_perm(roles.REVIEW_CORRECTIONS) else None)
     ctx["payroll"] = (selectors.net_payroll_total(today.month, today.year)
                       if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None)
     return render(request, "dashboard.html", ctx)
@@ -361,22 +338,46 @@ class AttendanceList(LoginRequiredMixin, ListView):
 
     template_name = "attendance_list.html"
     context_object_name = "records"
+    paginate_by = 50
+    MAX_RANGE_DAYS = 366
+
+    def date_range(self):
+        """(from, to) when the user typed a range, else None. A reversed or oversized range is corrected."""
+        d1, d2 = _parse_date(self.request.GET.get("from")), _parse_date(self.request.GET.get("to"))
+        if not (d1 or d2):
+            return None
+        d1, d2 = d1 or d2, d2 or d1
+        if d2 < d1:
+            d1, d2 = d2, d1
+        return d1, min(d2, d1 + timedelta(days=self.MAX_RANGE_DAYS - 1))
 
     def get_queryset(self):
-        p = period(self.request)
-        qs = Attendance.objects.select_related("emp", "emp__work_schedule", "emp__department__work_schedule") \
-            .filter(date__month=p["month"], date__year=p["year"])
+        p, g = period(self.request), self.request.GET
+        qs = Attendance.objects.select_related("emp", "emp__work_schedule", "emp__department__work_schedule")
+        rng = self.date_range()
+        qs = qs.filter(date__range=rng) if rng else qs.filter(date__month=p["month"], date__year=p["year"])
+        if g.get("status") in ("P", "A", "H", "L"):
+            qs = qs.filter(status=g["status"])
         if not self.request.user.has_perm(roles.VIEW_ALL_ATTENDANCE):
+            # Employees see only their own rows, whatever employee/department they ask for.
             return qs.filter(emp=get_employee_profile(self.request.user))
-        emp = self.request.GET.get("emp")
-        return qs.filter(emp_id=emp) if emp else qs
+        if g.get("emp", "").isdigit():
+            qs = qs.filter(emp_id=int(g["emp"]))
+        if g.get("department", "").isdigit():
+            qs = qs.filter(emp__department_id=int(g["department"]))
+        return qs
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
         ctx.update(period(self.request))
         can_see_all = self.request.user.has_perm(roles.VIEW_ALL_ATTENDANCE)
-        ctx.update(is_staff=can_see_all, emp=self.request.GET.get("emp", ""),
-                   employees=Employee.objects.all() if can_see_all else Employee.objects.none())
+        g, rng = self.request.GET, self.date_range()
+        ctx.update(is_staff=can_see_all, emp=g.get("emp", ""), department=g.get("department", ""),
+                   status=g.get("status", ""), date_from=rng[0].isoformat() if rng else "",
+                   date_to=rng[1].isoformat() if rng else "", statuses=Attendance.STATUS,
+                   departments=Department.objects.all() if can_see_all else Department.objects.none(),
+                   employees=Employee.objects.all() if can_see_all else Employee.objects.none(),
+                   total_matches=ctx["paginator"].count)
         resolver = schedules_service.ScheduleResolver()
         for rec in ctx["records"]:  # what each day's punches mean under the employee's schedule
             rec.day = schedules_service.evaluate(rec, resolver.for_employee(rec.emp))
@@ -387,6 +388,15 @@ class AttendanceCreate(PermissionRequiredMixin, Base, CreateView):
     permission_required = roles.ADD_ATTENDANCE
     model, form_class, title = Attendance, AttendanceForm, "Add attendance entry"
     success_url, success_message = reverse_lazy("attendance_list"), "Attendance saved."
+
+    def get_initial(self):  # links from the register / exception reports pre-fill the form
+        g = self.request.GET
+        initial = {}
+        if g.get("emp", "").isdigit():
+            initial["emp"] = int(g["emp"])
+        if _parse_date(g.get("date")):
+            initial["date"] = _parse_date(g["date"])
+        return initial
 
     def form_valid(self, form):
         with transaction.atomic():
@@ -426,6 +436,189 @@ class AttendanceDelete(PermissionRequiredMixin, Base, DeleteView):
                 AttendanceAudit.MANUAL_DELETE, rec, attendance_service.snapshot(rec), by=self.request.user,
                 reason=reason, deleted=True, day=rec.date, emp=rec.emp)
             return super().form_valid(form)
+
+
+# ---------- Register, bulk entry, corrections, exceptions ----------
+def _parse_date(value):
+    try:
+        return date.fromisoformat(value) if value else None
+    except ValueError:
+        return None
+
+
+@permission_required(roles.VIEW_ALL_ATTENDANCE)
+def attendance_register(request):
+    """Everyone's attendance for one day, with the people who still have no record."""
+    g = request.GET
+    day = _parse_date(g.get("date")) or timezone.localdate()
+    people = (Employee.objects.filter(joined_on__lte=day)
+              .filter(Q(is_active=True) | Q(separation_date__gte=day) | Q(attendance__date=day)).distinct()
+              .select_related("department", "position", "work_schedule", "department__work_schedule"))
+    if g.get("department", "").isdigit():
+        people = people.filter(department_id=int(g["department"]))
+    if g.get("q", "").strip():
+        q = g["q"].strip()
+        people = people.filter(Q(name__icontains=q) | Q(employee_number__icontains=q))
+    records = {r.emp_id: r for r in Attendance.objects.filter(date=day)}
+    holiday = Holiday.objects.filter(date=day).first()
+    resolver = schedules_service.ScheduleResolver()
+    rows, counts = [], {"P": 0, "H": 0, "A": 0, "L": 0, "unmarked": 0, "off": 0}
+    for emp in people:
+        rec = records.get(emp.pk)
+        schedule = resolver.for_employee(emp)
+        working = day.weekday() in (schedule.working_days if schedule else [0, 1, 2, 3, 4]) and not holiday
+        state = rec.status if rec else ("unmarked" if working else "off")
+        counts[state] += 1
+        rows.append({"emp": emp, "rec": rec, "state": state, "day": schedules_service.evaluate(rec, schedule) if rec else None})
+    wanted = g.get("status", "")
+    if wanted:
+        rows = [r for r in rows if r["state"] == wanted]
+    return render(request, "attendance_register.html", {
+        "day": day, "rows": rows, "counts": counts, "holiday": holiday, "q": g.get("q", ""),
+        "department": g.get("department", ""), "status": wanted, "departments": Department.objects.all(),
+        "prev_day": day - timedelta(days=1), "next_day": day + timedelta(days=1),
+        "can_bulk": request.user.has_perms([roles.ADD_ATTENDANCE, roles.MARK_ATTENDANCE]),
+        "can_overwrite": request.user.has_perm(roles.CHANGE_ATTENDANCE),
+        "today": timezone.localdate()})
+
+
+@permission_required(roles.ADD_ATTENDANCE, roles.MARK_ATTENDANCE)
+def attendance_bulk(request):
+    if request.method != "POST":
+        return redirect("attendance_register")
+    form = BulkAttendanceForm(request.POST)
+    back = reverse("attendance_register")
+    if not form.is_valid():
+        messages.error(request, "Bulk entry not saved: " + "; ".join(
+            f"{name}: {' '.join(errs)}" for name, errs in form.errors.items()))
+        return redirect(back)
+    data = form.cleaned_data
+    back = f"{back}?date={data['date']:%Y-%m-%d}"
+    ids = [int(i) for i in request.POST.getlist("emp") if i.isdigit()]
+    if not ids:
+        messages.error(request, "Tick at least one employee first.")
+        return redirect(back)
+    if data["overwrite"] and not request.user.has_perm(roles.CHANGE_ATTENDANCE):
+        raise PermissionDenied
+    try:
+        results = attendance_service.bulk_mark(
+            Employee.objects.filter(pk__in=ids).select_related("work_location"), data["date"], status=data["status"],
+            check_in=data["check_in"], check_out=data["check_out"], ends_next_day=data["ends_next_day"],
+            by=request.user, reason=data["reason"], overwrite=data["overwrite"])
+    except attendance_service.AttendanceError as exc:
+        messages.error(request, str(exc))
+        return redirect(back)
+    done = [r for r in results if r.outcome in ("created", "updated")]
+    skipped = [r for r in results if r.outcome == "skipped"]
+    unchanged = [r for r in results if r.outcome == "unchanged"]
+    messages.success(request, f"{len(done)} employee(s) updated" + (f", {len(unchanged)} already correct" if unchanged else "")
+                     + (f", {len(skipped)} skipped." if skipped else "."))
+    for r in skipped[:8]:
+        messages.warning(request, f"{r.emp.name}: {r.message}")
+    return redirect(back)
+
+
+@login_required
+def correction_new(request):
+    emp = require_employee_profile(request.user)
+    initial = {"date": _parse_date(request.GET.get("date")) or timeutil.today_for(emp), "status": "P"}
+    current = Attendance.objects.filter(emp=emp, date=initial["date"]).first()
+    if current:
+        initial.update(status=current.status, check_in=current.check_in, check_out=current.check_out,
+                       ends_next_day=current.ends_next_day)
+    form = CorrectionRequestForm(request.POST or None, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        try:
+            req = corrections_service.submit(emp, by=request.user, **form.cleaned_data)
+        except attendance_service.AttendanceError as exc:
+            form.add_error(None, str(exc))
+        else:
+            messages.success(request, f"Request sent for {req.date:%d %b %Y}. You will be notified of the decision.")
+            return redirect("my_corrections")
+    return render(request, "correction_form.html", {"form": form, "window": settings.CORRECTION_WINDOW_DAYS})
+
+
+@login_required
+def my_corrections(request):
+    emp = require_employee_profile(request.user, active=False)
+    return render(request, "correction_list.html", {
+        "mode": "mine", "items": AttendanceCorrectionRequest.objects.filter(emp=emp).select_related("decided_by")[:100]})
+
+
+@login_required
+def correction_cancel(request, pk):
+    req = get_object_or_404(AttendanceCorrectionRequest, pk=pk, emp__user=request.user)
+    if request.method == "POST":
+        try:
+            corrections_service.cancel(req, by=request.user)
+            messages.info(request, "Request cancelled.")
+        except attendance_service.AttendanceError as exc:
+            messages.error(request, str(exc))
+    return redirect("my_corrections")
+
+
+@login_required
+def correction_list(request):
+    """The queue of requests this user may decide: HR sees all, a manager sees their team's."""
+    qs = corrections_service.reviewable_requests(request.user)
+    if not (request.user.has_perm(roles.REVIEW_CORRECTIONS) or qs.exists()):
+        raise PermissionDenied
+    status = request.GET.get("status", "PENDING")
+    if status in dict(AttendanceCorrectionRequest.STATUSES):
+        qs = qs.filter(status=status)
+    else:
+        status = ""
+    return render(request, "correction_list.html", {
+        "mode": "review", "items": qs.order_by("created_at" if status == "PENDING" else "-created_at")[:200],
+        "status": status, "statuses": AttendanceCorrectionRequest.STATUSES})
+
+
+@login_required
+def correction_decide(request, pk):
+    req = get_object_or_404(AttendanceCorrectionRequest.objects.select_related("emp"), pk=pk)
+    if not corrections_service.can_review(request.user, req):
+        raise Http404  # not your request to see
+    if request.method == "POST":
+        approve = request.POST.get("action") == "approve"
+        try:
+            corrections_service.decide(req, approve=approve, note=request.POST.get("note", ""), by=request.user)
+            messages.success(request, f"Request {'approved: attendance updated' if approve else 'rejected'}.")
+        except attendance_service.AttendanceError as exc:
+            messages.error(request, str(exc))
+    return redirect(request.POST.get("next") if request.POST.get("next", "").startswith("/") else "correction_list")
+
+
+def _exceptions(request, preset):
+    g = request.GET
+    today = timezone.localdate()
+    d_to = _parse_date(g.get("to")) or today - timedelta(days=1)
+    d_from = _parse_date(g.get("from")) or d_to - timedelta(days=13)
+    default = exceptions_service.MISSING_PUNCH_KINDS if preset == "missing" else exceptions_service.DEFAULT_KINDS
+    valid = dict(exceptions_service.KINDS)
+    chosen = [k for k in g.getlist("kind") if k in valid] or list(default)
+    error, rows = "", []
+    try:
+        rows = exceptions_service.find_exceptions(
+            d_from, d_to, kinds=chosen, department_id=int(g["department"]) if g.get("department", "").isdigit() else None,
+            emp_id=int(g["emp"]) if g.get("emp", "").isdigit() else None)
+    except ValueError as exc:
+        error = str(exc)
+    page = Paginator(rows, 50).get_page(g.get("page"))
+    return render(request, "attendance_exceptions.html", {
+        "page": page, "total": len(rows), "error": error, "kinds": exceptions_service.KINDS, "chosen": chosen,
+        "d_from": min(d_from, d_to), "d_to": max(d_from, d_to), "department": g.get("department", ""),
+        "emp": g.get("emp", ""), "departments": Department.objects.all(), "employees": Employee.objects.all(),
+        "preset": preset})
+
+
+@permission_required(roles.VIEW_ALL_ATTENDANCE)
+def attendance_exceptions(request):
+    return _exceptions(request, "all")
+
+
+@permission_required(roles.VIEW_ALL_ATTENDANCE)
+def attendance_missing_punches(request):
+    return _exceptions(request, "missing")
 
 
 # ---------- Reports & payroll ----------
@@ -561,132 +754,3 @@ def leave_action(request, pk):
             messages.info(request, f"Leave application for {leave.emp.name} rejected.")
 
     return redirect("leaves_list")
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-@login_required
-@permission_required('core.view_attendance') # Removed raise_exception
-def admin_attendance_dashboard(request):
-    """
-    Master registry grid with interactive search combinations.
-    """
-    # Alternative: if you strictly want a 403 instead of a login redirect:
-    # if not request.user.has_perm('core.view_attendance'):
-    #     raise PermissionDenied
-        
-    filters = {
-        'employee_id': request.GET.get('employee'),
-        'department_id': request.GET.get('department'),
-        'start_date': request.GET.get('start_date'),
-        'end_date': request.GET.get('end_date'),
-    }
-    
-    context = {
-        'attendance_records': get_filtered_attendance(filters),
-        'departments': Department.objects.all(),
-        'employees': Employee.objects.filter(is_active=True),
-        'selected_filters': filters
-    }
-    return render(request, 'core/admin_attendance_list.html', context)
-
-@login_required
-@permission_required('core.can_review_corrections') # Removed raise_exception
-def review_corrections_queue(request):
-    """
-    Unified manager hub for confirming or rejecting historical changes.
-    """
-    if request.method == 'POST':
-        req_id = request.POST.get('request_id')
-        action = request.POST.get('action') # 'APPROVED' or 'REJECTED'
-        notes = request.POST.get('review_notes', '')
-        
-        try:
-            process_correction_request(req_id, action, request.user, notes)
-        except ValueError as e:
-            # Handle cleanly if already edited concurrently
-            pass
-        return redirect('review_corrections_queue')
-
-    context = {
-        'pending_requests': AttendanceCorrectionRequest.objects.filter(status='PENDING').select_related('employee')
-    }
-<<<<<<< HEAD
-<<<<<<< HEAD
-    return render(request, 'core/admin_corrections_queue.html', context)
-
-@login_required
-@permission_required('core.change_attendance')
-def bulk_attendance_entry(request):
-    """
-    Process bulk record injection using safe multi-record database transactions.
-    """
-    if request.method == 'POST':
-        form = BulkAttendanceForm(request.POST)
-        if form.is_valid():
-            employee_ids = [emp.id for emp in form.cleaned_data['employees']]
-            date_target = form.cleaned_data['date']
-            
-            # Combine current date with input times to construct absolute datetimes
-            check_in_dt = None
-            check_out_dt = None
-            if form.cleaned_data['check_in']:
-                check_in_dt = timezone.make_aware(datetime.combine(date_target, form.cleaned_data['check_in']))
-            if form.cleaned_data['check_out']:
-                check_out_dt = timezone.make_aware(datetime.combine(date_target, form.cleaned_data['check_out']))
-                
-            submit_bulk_attendance(
-                employee_ids=employee_ids,
-                date=date_target,
-                check_in_time=check_in_dt,
-                check_out_time=check_out_dt,
-                author_user=request.user,
-                reason=form.cleaned_data['reason']
-            )
-            return redirect('admin_attendance_dashboard')
-    else:
-        form = BulkAttendanceForm(initial={'date': timezone.now().date()})
-        
-    return render(request, 'core/admin_bulk_entry.html', {'form': form})
-
-@login_required
-@permission_required('core.view_attendance')
-def attendance_anomaly_reports(request):
-    """
-    Central operations workspace for Missing-Punch registers and Exception metrics.
-    """
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-    
-    # Establish dynamic fallbacks if dates are omitted
-    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else timezone.now().date()
-    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else timezone.now().date()
-    
-    context = {
-        'missing_punches': get_missing_punch_report(start_date, end_date),
-        'exceptions': get_attendance_exceptions_report(start_date, end_date),
-        'start_date': start_date,
-        'end_date': end_date
-    }
-    return render(request, 'core/admin_anomaly_reports.html', context)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)
-=======
-    return render(request, 'core/admin_corrections_queue.html', context)
->>>>>>> parent of 06a673d (feat: 1. Bulk Attendance Entry Form & View, Manager Correction Queue HTML Layout,  Attendance Tracking, Missing-Punch, & Exception Reports)
-=======
-    return render(request, 'core/admin_corrections_queue.html', context)
->>>>>>> parent of 06a673d (feat: 1. Bulk Attendance Entry Form & View, Manager Correction Queue HTML Layout,  Attendance Tracking, Missing-Punch, & Exception Reports)
-=======
->>>>>>> parent of ab78984 ( feat: improve attendance administration)

@@ -270,7 +270,9 @@ class SearchAndPaginationTests(ProfileTestBase):
         self.login(self.hr_admin)
         with CaptureQueriesContext(connection) as ctx:
             self.client.get(reverse("employee_list"))
-        self.assertLessEqual(len(ctx), 12, [q["sql"][:80] for q in ctx])
+        # fixed overhead (session, user, password flag, permissions, nav badge) plus the page itself;
+        # what matters is that this stays flat as rows are added
+        self.assertLessEqual(len(ctx), 14, [q["sql"][:80] for q in ctx])
 
     def test_list_links_to_profiles_and_hides_pay_from_hr_officer(self):
         r = self.get(q="Staff 01")

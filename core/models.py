@@ -513,6 +513,8 @@ class AttendanceAudit(models.Model):
     old_values = models.JSONField(null=True, blank=True)
     new_values = models.JSONField(null=True, blank=True)
     reason = models.CharField(max_length=255, blank=True)
+    correction_request = models.ForeignKey("AttendanceCorrectionRequest", on_delete=models.SET_NULL, null=True,
+                                           blank=True, related_name="audit_entries")
     changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -529,3 +531,50 @@ class AttendanceAudit(models.Model):
         if not self._state.adding:
             raise ValidationError("Attendance history cannot be modified.")
         super().save(*args, **kwargs)
+
+
+class AttendanceCorrectionRequest(models.Model):
+    """An employee asks for a day's attendance to be corrected; a manager or HR approves or rejects it.
+
+    Approving applies the change (with a full audit entry linked back here); rejecting changes nothing.
+    """
+
+    PENDING, APPROVED, REJECTED, CANCELLED = "PENDING", "APPROVED", "REJECTED", "CANCELLED"
+    STATUSES = [(PENDING, "Pending"), (APPROVED, "Approved"), (REJECTED, "Rejected"), (CANCELLED, "Cancelled")]
+
+    emp = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="correction_requests")
+    date = models.DateField()
+    requested_status = models.CharField(max_length=1, choices=Attendance.STATUS, default="P")
+    requested_check_in = models.TimeField(null=True, blank=True)
+    requested_check_out = models.TimeField(null=True, blank=True)
+    requested_ends_next_day = models.BooleanField(default=False)
+    reason = models.CharField(max_length=255)
+    original_values = models.JSONField(null=True, blank=True, help_text="The record as it was when requested")
+    status = models.CharField(max_length=10, choices=STATUSES, default=PENDING)
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        db_table = "attendance_correction_request"
+        ordering = ["-created_at", "-id"]
+        permissions = [("review_attendance_corrections", "Can review attendance correction requests for all employees")]
+        indexes = [models.Index(fields=["status", "created_at"], name="attcorr_status_idx"),
+                   models.Index(fields=["emp", "date"], name="attcorr_emp_date_idx")]
+        constraints = [models.UniqueConstraint(fields=["emp", "date"], condition=models.Q(status="PENDING"),
+                                               name="attcorr_one_pending_per_day")]
+
+    def __str__(self):
+        return f"Correction #{self.pk}: {self.emp_id} {self.date} ({self.status})"
+
+    @property
+    def requested_summary(self):
+        label = dict(Attendance.STATUS)[self.requested_status]
+        times = ""
+        if self.requested_check_in or self.requested_check_out:
+            times = f" {self.requested_check_in:%H:%M}" if self.requested_check_in else " --"
+            times += f" - {self.requested_check_out:%H:%M}" if self.requested_check_out else " - --"
+            times += " (+1 day)" if self.requested_ends_next_day else ""
+        return f"{label}{times}"

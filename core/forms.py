@@ -66,6 +66,27 @@ class EmployeeSelfForm(forms.ModelForm):
         widgets = {"address": forms.Textarea(attrs={"rows": 3})}
 
 
+class CorrectionRequestForm(forms.Form):
+    """What an employee asks for. The service applies the real rules; this only collects the values."""
+
+    date = forms.DateField(widget=D)
+    status = forms.ChoiceField(choices=Attendance.STATUS, label="Correct status")
+    check_in = forms.TimeField(required=False, widget=T)
+    check_out = forms.TimeField(required=False, widget=T)
+    ends_next_day = forms.BooleanField(required=False, label="Check-out is on the next day (overnight shift)")
+    reason = forms.CharField(max_length=255, help_text="What went wrong? (seen by your manager / HR)")
+
+
+class BulkAttendanceForm(forms.Form):
+    date = forms.DateField(widget=D)
+    status = forms.ChoiceField(choices=Attendance.STATUS, label="Mark as")
+    check_in = forms.TimeField(required=False, widget=T)
+    check_out = forms.TimeField(required=False, widget=T)
+    ends_next_day = forms.BooleanField(required=False)
+    reason = forms.CharField(max_length=255)
+    overwrite = forms.BooleanField(required=False, label="Replace existing records")
+
+
 class DeactivateEmployeeForm(forms.Form):
     status = forms.ChoiceField(choices=[c for c in Employee.STATUS if c[0] not in Employee.ACTIVE_STATUSES])
     separation_date = forms.DateField(required=False, widget=D, initial=date.today,

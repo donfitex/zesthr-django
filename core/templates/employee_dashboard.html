@@ -123,7 +123,7 @@
 
 <!-- RECENT ATTENDANCE LOG -->
 <section class="card">
-  <div class="card-head"><h2>My Recent Attendance</h2><a href="{% url 'attendance_list' %}">View complete history &rarr;</a></div>
+  <div class="card-head"><h2>My Recent Attendance</h2><span>{% if emp.is_active %}<a href="{% url 'correction_new' %}">Request a correction</a> &middot; {% endif %}<a href="{% url 'attendance_list' %}">View complete history &rarr;</a></span></div>
   {% if recent %}
     <div class="scroll"><table>
       <thead><tr><th>Date</th><th>Day</th><th>Check-In</th><th>Check-Out</th><th>Hours</th><th>Status</th></tr></thead>

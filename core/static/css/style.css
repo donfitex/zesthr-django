@@ -342,3 +342,5 @@ label{display:block;font-weight:500;margin-bottom:.9rem;font-size:.92rem}label s
 .eyebrow{font-size:.9rem;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}.section-title{font-size:1.05rem;margin:.2rem 0 .8rem}.clip{max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .btn-punch:disabled{opacity:.45;cursor:not-allowed}
 @media (max-width:560px){.notice{flex-direction:column;align-items:flex-start;gap:.3rem}.head .actions{width:100%}}
+.kinds{border:1px solid var(--line);border-radius:8px;padding:.3rem .7rem;display:flex;gap:.8rem;flex-wrap:wrap;align-items:center}.kinds legend{font-size:.8rem;color:var(--mut);padding:0 .3rem}.kinds label{display:flex;gap:.3rem;align-items:center}
+.bulk-panel{position:sticky;bottom:.5rem}.bulk-panel h2{margin:.1rem 0 .6rem;font-size:1rem}form.inline{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}form.inline input{max-width:210px}

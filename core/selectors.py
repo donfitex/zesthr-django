@@ -5,6 +5,8 @@ from datetime import date, timedelta
 from django.db.models import Sum
 
 from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
+from .models import AttendanceCorrectionRequest
+from .services import corrections as corrections_service
 from .services import schedules
 from .services.attendance import current_record
 
@@ -121,6 +123,16 @@ def employee_notifications(emp, today, limit=6):
             f"Your {leave.get_leave_type_display()} request for {leave.start_date:%d %b} was {verdict}.{note}", "leaves_list")
     for slip in Salary.objects.filter(emp=emp, generated_on__date__gte=today - timedelta(days=30)).order_by("-year", "-month")[:2]:
         add("success", f"Your payslip for {calendar.month_name[slip.month]} {slip.year} is available.", ("slip", slip.pk))
+    for req in AttendanceCorrectionRequest.objects.filter(
+            emp=emp, status__in=["APPROVED", "REJECTED"], decided_at__date__gte=today - timedelta(days=14)).order_by("-decided_at")[:2]:
+        verdict = "approved" if req.status == "APPROVED" else "rejected"
+        note = f" Note: {req.decision_note}" if req.decision_note else ""
+        add("success" if req.status == "APPROVED" else "warn",
+            f"Your correction request for {req.date:%d %b} was {verdict}.{note}", "my_corrections")
+    to_review = corrections_service.reviewable_requests(emp.user).filter(status="PENDING").count() if emp.user_id else 0
+    if to_review:
+        add("info", f"{to_review} attendance correction request{'s' if to_review != 1 else ''} waiting for your review.",
+            "correction_list")
     holiday = Holiday.objects.filter(date__in=[today, today + timedelta(days=1)]).order_by("date").first()
     if holiday:
         when = "Today" if holiday.date == today else "Tomorrow"

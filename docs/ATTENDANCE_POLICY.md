@@ -56,6 +56,28 @@ The company time zone is the `DJANGO_TIME_ZONE` setting (default `Asia/Kolkata`;
 `Africa/Lagos` for Nigeria). A **work location** may have its own time zone; employees at that location
 get their own "today" and clock time when punching, and the "no future dates" rule uses it too.
 
+## Registers, bulk entry and exceptions
+
+* **Daily register** (any date): everyone's record for the day, with counts. People with no record are
+  *Unmarked* only on a working day; rest days and company holidays show *Not a working day*.
+* **Bulk marking:** tick employees and mark them Present / Absent / Half day / Leave with one reason. Each person
+  succeeds or fails on its own; people who already have a record are skipped unless "replace existing" is chosen
+  (which needs the change-attendance permission). Every change is written to the audit history.
+* **Exceptions and missing punches:** computed live, nothing stored, so fixing a day removes it from the list.
+  Kinds: missing check-out (past days only), present without times, unmarked working day, late, early, overtime.
+  Employees without a schedule are treated as Monday-Friday workers. Range limit: 62 days.
+
+## Correction requests
+
+1. An employee requests a fix for a day (their own, up to `DJANGO_CORRECTION_WINDOW_DAYS` back, default 30, never
+   in the future) with the values it *should* have and a reason. The values must pass the normal attendance
+   rules and differ from the current record. One open request per day (enforced by the database).
+2. **Who decides:** HR roles (permission *review attendance corrections*) for anyone, and an employee's **direct
+   manager** for their own team. Nobody decides their own request, HR included.
+3. **Approve:** applies the change to the locked record and writes an audit entry linked to the request.
+   **Reject:** needs a note, changes nothing. A decision is final; simultaneous clicks apply exactly once.
+4. The employee is notified on their dashboard; reviewers see a count in the sidebar and on the dashboard.
+
 ## Known limits
 
 * Overtime is not approved by a manager before it is paid; the daily maximum and threshold are the guard rails.

@@ -52,7 +52,11 @@
     {% endif %}
     <details {% if 'attendance' in n %}open{% endif %}><summary>Attendance</summary>
       {% if perms.core.mark_attendance %}<a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Today: check-in / out</a>{% endif %}
+      <a class="{% if n == 'attendance_register' %}on{% endif %}" href="{% url 'attendance_register' %}">Daily register</a>
       <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">Attendance log</a>
+      <a class="{% if n == 'attendance_exceptions' %}on{% endif %}" href="{% url 'attendance_exceptions' %}">Exceptions</a>
+      <a class="{% if n == 'attendance_missing_punches' %}on{% endif %}" href="{% url 'attendance_missing_punches' %}">Missing punches</a>
+      {% if is_correction_reviewer %}<a class="{% if n == 'correction_list' %}on{% endif %}" href="{% url 'correction_list' %}">Correction requests{% if pending_corrections %} <span class="hros-badge">{{ pending_corrections }}</span>{% endif %}</a>{% endif %}
       {% if perms.core.add_attendance %}<a class="{% if n == 'attendance_add' %}on{% endif %}" href="{% url 'attendance_add' %}">Add manual entry</a>{% endif %}
     </details>
     {% if perms.core.view_all_leaves %}
@@ -75,6 +79,8 @@
     {% elif user.employee_profile %}
     {% if user.employee_profile.is_active %}<a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Punch Attendance</a>{% endif %}
     <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">My Attendance Log</a>
+    {% if user.employee_profile %}<a class="{% if n == 'my_corrections' or n == 'correction_new' %}on{% endif %}" href="{% url 'my_corrections' %}">My corrections</a>{% endif %}
+    {% if is_correction_reviewer %}<a class="{% if n == 'correction_list' %}on{% endif %}" href="{% url 'correction_list' %}">Corrections to review{% if pending_corrections %} <span class="hros-badge">{{ pending_corrections }}</span>{% endif %}</a>{% endif %}
     <details {% if 'leave' in n %}open{% endif %}><summary>Leaves</summary>
       {% if user.employee_profile.is_active %}<a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply Leave (1 SL/Mo)</a>{% endif %}
       <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">My Leave Requests</a>

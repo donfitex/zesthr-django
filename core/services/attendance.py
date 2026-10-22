@@ -18,8 +18,10 @@ two simultaneous requests can never both succeed):
 Every change writes an AttendanceAudit row in the same transaction.
 Corrections of any other kind go through the edit form, which requires a reason.
 """
+from dataclasses import dataclass
 from datetime import timedelta
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .. import timeutil
@@ -47,8 +49,8 @@ def snapshot(rec):
             "ends_next_day": rec.ends_next_day}
 
 
-def record_audit(action, rec, before, *, by=None, reason="", day=None, emp=None, deleted=False):
-    return AttendanceAudit.objects.create(
+def record_audit(action, rec, before, *, by=None, reason="", day=None, emp=None, deleted=False, correction=None):
+    return AttendanceAudit.objects.create(correction_request=correction, 
         emp=emp or rec.emp, date=day or rec.date, attendance=None if deleted else rec, record_id=rec.pk,
         action=action, old_values=before, new_values=None if deleted else snapshot(rec),
         reason=(reason or "").strip()[:255], changed_by=by if getattr(by, "pk", None) else None)
@@ -169,3 +171,85 @@ def record_manual_change(action, rec, before, *, by, reason, deleted=False, day=
     if action == AttendanceAudit.MANUAL_EDIT and before == snapshot(rec) and not deleted:
         return None  # saved without changing anything: nothing to record
     return record_audit(action, rec, before, by=by, reason=reason, deleted=deleted, day=day, emp=emp)
+
+
+# --- manual entry (HR registers, bulk marking, approved corrections) -----------------------
+MAX_BULK = 500
+
+
+def build_candidate(emp, day, *, status, check_in=None, check_out=None, ends_next_day=False):
+    """An unsaved Attendance with the wanted values, normalised (Absent/Leave carry no times)."""
+    if status in ("A", "L"):
+        check_in = check_out = None
+        ends_next_day = False
+    return Attendance(emp=emp, date=day, status=status, check_in=check_in, check_out=check_out,
+                      ends_next_day=bool(ends_next_day and check_in and check_out))
+
+
+def validate_candidate(rec):
+    """Run the single-row rules; raises AttendanceError with every problem in one message."""
+    try:
+        rec.clean()
+    except ValidationError as exc:
+        raise AttendanceError("invalid", " ".join(m for msgs in exc.message_dict.values() for m in msgs)) from exc
+
+
+@transaction.atomic
+def save_manual(emp, day, *, status, check_in=None, check_out=None, ends_next_day=False, by, reason,
+                overwrite=True, correction=None):
+    """Create or change one day's record on behalf of HR / an approved correction.
+
+    Returns (record, outcome) with outcome 'created', 'updated' or 'unchanged'. A reason is mandatory.
+    The row is locked while it changes and every real change is written to the audit history.
+    """
+    if not (reason or "").strip():
+        raise AttendanceError("reason_required", "A reason is required for manual attendance changes.")
+    wanted = build_candidate(emp, day, status=status, check_in=check_in, check_out=check_out, ends_next_day=ends_next_day)
+    validate_candidate(wanted)
+    rec, created = Attendance.objects.select_for_update().get_or_create(
+        emp=emp, date=day, defaults={"status": wanted.status, "check_in": wanted.check_in,
+                                     "check_out": wanted.check_out, "ends_next_day": wanted.ends_next_day})
+    if created:
+        record_audit(AttendanceAudit.MANUAL_CREATE, rec, None, by=by, reason=reason, correction=correction)
+        return rec, "created"
+    if not overwrite:
+        raise AttendanceError("exists", f"{emp.name} already has a record for {day:%d %b %Y}.")
+    before = snapshot(rec)
+    rec.status, rec.check_in, rec.check_out, rec.ends_next_day = (
+        wanted.status, wanted.check_in, wanted.check_out, wanted.ends_next_day)
+    if snapshot(rec) == before:
+        return rec, "unchanged"
+    rec.save()
+    record_audit(AttendanceAudit.MANUAL_EDIT, rec, before, by=by, reason=reason, correction=correction)
+    return rec, "updated"
+
+
+@dataclass(frozen=True)
+class BulkResult:
+    emp: object
+    outcome: str  # created / updated / unchanged / skipped
+    message: str = ""
+
+
+def bulk_mark(employees, day, *, status, check_in=None, check_out=None, ends_next_day=False, by, reason,
+              overwrite=False):
+    """Apply the same status/times to many employees for one day.
+
+    Each employee succeeds or fails on its own (a savepoint per person), so one bad row never blocks the
+    rest. Existing records are left alone unless `overwrite` is set.
+    """
+    employees = list(employees)
+    if len(employees) > MAX_BULK:
+        raise AttendanceError("too_many", f"At most {MAX_BULK} employees can be changed at once.")
+    if not (reason or "").strip():
+        raise AttendanceError("reason_required", "A reason is required for manual attendance changes.")
+    results = []
+    for emp in employees:
+        try:
+            with transaction.atomic():
+                _, outcome = save_manual(emp, day, status=status, check_in=check_in, check_out=check_out,
+                                         ends_next_day=ends_next_day, by=by, reason=reason, overwrite=overwrite)
+            results.append(BulkResult(emp, outcome))
+        except AttendanceError as exc:
+            results.append(BulkResult(emp, "skipped", str(exc)))
+    return results

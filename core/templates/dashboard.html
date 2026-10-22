@@ -9,6 +9,7 @@
   <a class="stat warn" href="{% url 'attendance_today' %}"><span>On leave</span><b>{{ leave }}</b></a>
   <a class="stat" href="{% url 'attendance_today' %}"><span>Not marked yet</span><b>{{ unmarked }}</b></a>
   {% if pending_leaves is not None %}<a class="stat warn" href="{% url 'leaves_list' %}"><span>Pending leaves</span><b>{{ pending_leaves }}</b></a>{% endif %}
+  {% if pending_corrections is not None %}<a class="stat warn" href="{% url 'correction_list' %}"><span>Correction requests</span><b>{{ pending_corrections }}</b></a>{% endif %}
   {% if payroll is not None %}<a class="stat navy" href="{% url 'payroll' %}"><span>This month's net payroll</span><b>₹{{ payroll|floatformat:0 }}</b></a>{% endif %}
 </section>
 <section class="card">
