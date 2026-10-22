@@ -7,8 +7,6 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
-from django.conf import settings
-
 
 class Department(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -531,37 +529,3 @@ class AttendanceAudit(models.Model):
         if not self._state.adding:
             raise ValidationError("Attendance history cannot be modified.")
         super().save(*args, **kwargs)
-
-class AttendanceCorrectionRequest(models.Model):
-    STATUS_CHOICES = (
-        ('PENDING', 'Pending Review'),
-        ('APPROVED', 'Approved'),
-        ('REJECTED', 'Rejected'),
-    )
-
-    employee = models.ForeignKey('Employee', on_delete=models.CASCADE, related_name='correction_requests')
-    attendance_date = models.DateField()
-    requested_check_in = models.DateTimeField(null=True, blank=True)
-    requested_check_out = models.DateTimeField(null=True, blank=True)
-    reason = models.TextField(help_text="Reason for the correction request.")
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='PENDING')
-    
-    reviewed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
-        related_name='reviewed_corrections'
-    )
-    review_notes = models.TextField(blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-created_at']
-        permissions = [
-            ("can_review_corrections", "Can review employee attendance correction requests"),
-        ]
-
-    def __str__(self):
-        return f"Correction: {self.employee} for {self.attendance_date} ({self.status})"

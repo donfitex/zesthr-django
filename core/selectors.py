@@ -2,11 +2,12 @@
 import calendar
 from datetime import date, timedelta
 
-from django.db.models import Sum, Q
+from django.db.models import Sum
 
 from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
 from .services import schedules
 from .services.attendance import current_record
+
 
 def company_snapshot(today, recent_limit=8):
     """Today's headcount and attendance totals for the whole company."""
@@ -160,41 +161,3 @@ def attendance_register(today):
     """(employee, today's record or None) for every active employee."""
     records = {a.emp_id: a for a in Attendance.objects.filter(date=today)}
     return [(e, records.get(e.id)) for e in Employee.objects.filter(is_active=True)]
-
-def get_filtered_attendance(filters):
-    """
-    Task 3 & 4: Master querying using employee, department, and custom date range windows.
-    """
-    queryset = Attendance.objects.select_related('employee', 'employee__department')
-    
-    if filters.get('employee_id'):
-        queryset = queryset.filter(employee_id=filters['employee_id'])
-    if filters.get('department_id'):
-        queryset = queryset.filter(employee__department_id=filters['department_id'])
-    if filters.get('start_date'):
-        queryset = queryset.filter(date__gte=filters['start_date'])
-    if filters.get('end_date'):
-        queryset = queryset.filter(date__lte=filters['end_date'])
-        
-    return queryset.ordering('-date', 'employee__last_name')
-
-def get_missing_punch_report(start_date, end_date):
-    """
-    Task 8: Finds complete anomalies where someone forgot either an entry or exit punch.
-    """
-    return Attendance.objects.filter(
-        date__range=(start_date, end_date)
-    ).filter(
-        Q(check_in__isnull=True, check_out__isnull=False) |
-        Q(check_in__isnull=False, check_out__isnull=True)
-    ).select_related('employee', 'employee__department')
-
-def get_attendance_exceptions_report(start_date, end_date):
-    """
-    Task 9: Isolates compliance issues (e.g. manual adjustments, excessive delays, flag marks).
-    """
-    return Attendance.objects.filter(
-        date__range=(start_date, end_date)
-    ).filter(
-        Q(notes__icontains="manual") | Q(notes__icontains="corrected") | Q(notes__icontains="late")
-    ).select_related('employee')
