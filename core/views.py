@@ -30,6 +30,9 @@ from .services import schedules as schedules_service
 from core.selectors import get_filtered_attendance, get_missing_punch_report, get_attendance_exceptions_report
 from core.services.attendance import submit_bulk_attendance, process_correction_request
 
+from datetime import datetime
+from core.forms import BulkAttendanceForm
+
 def period(request):
     """Month/year filter shared by report, attendance log and payroll."""
     today = timezone.localdate()
@@ -582,3 +585,58 @@ def review_corrections_queue(request):
         'pending_requests': AttendanceCorrectionRequest.objects.filter(status='PENDING').select_related('employee')
     }
     return render(request, 'core/admin_corrections_queue.html', context)
+
+@login_required
+@permission_required('core.change_attendance')
+def bulk_attendance_entry(request):
+    """
+    Process bulk record injection using safe multi-record database transactions.
+    """
+    if request.method == 'POST':
+        form = BulkAttendanceForm(request.POST)
+        if form.is_valid():
+            employee_ids = [emp.id for emp in form.cleaned_data['employees']]
+            date_target = form.cleaned_data['date']
+            
+            # Combine current date with input times to construct absolute datetimes
+            check_in_dt = None
+            check_out_dt = None
+            if form.cleaned_data['check_in']:
+                check_in_dt = timezone.make_aware(datetime.combine(date_target, form.cleaned_data['check_in']))
+            if form.cleaned_data['check_out']:
+                check_out_dt = timezone.make_aware(datetime.combine(date_target, form.cleaned_data['check_out']))
+                
+            submit_bulk_attendance(
+                employee_ids=employee_ids,
+                date=date_target,
+                check_in_time=check_in_dt,
+                check_out_time=check_out_dt,
+                author_user=request.user,
+                reason=form.cleaned_data['reason']
+            )
+            return redirect('admin_attendance_dashboard')
+    else:
+        form = BulkAttendanceForm(initial={'date': timezone.now().date()})
+        
+    return render(request, 'core/admin_bulk_entry.html', {'form': form})
+
+@login_required
+@permission_required('core.view_attendance')
+def attendance_anomaly_reports(request):
+    """
+    Central operations workspace for Missing-Punch registers and Exception metrics.
+    """
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+    
+    # Establish dynamic fallbacks if dates are omitted
+    start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date() if start_date_str else timezone.now().date()
+    end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else timezone.now().date()
+    
+    context = {
+        'missing_punches': get_missing_punch_report(start_date, end_date),
+        'exceptions': get_attendance_exceptions_report(start_date, end_date),
+        'start_date': start_date,
+        'end_date': end_date
+    }
+    return render(request, 'core/admin_anomaly_reports.html', context)
