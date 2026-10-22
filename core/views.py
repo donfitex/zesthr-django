@@ -28,6 +28,7 @@ from .services import schedules as schedules_service
 
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 from core.selectors import get_filtered_attendance, get_missing_punch_report, get_attendance_exceptions_report
 from core.services.attendance import submit_bulk_attendance, process_correction_request
@@ -35,6 +36,8 @@ from core.services.attendance import submit_bulk_attendance, process_correction_
 from datetime import datetime
 from core.forms import BulkAttendanceForm
 
+=======
+>>>>>>> parent of ab78984 ( feat: improve attendance administration)
 =======
 >>>>>>> parent of ab78984 ( feat: improve attendance administration)
 =======
@@ -545,6 +548,7 @@ def leave_action(request, pk):
     return redirect("leaves_list")
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 @login_required
 @permission_required('core.view_attendance') # Removed raise_exception
@@ -648,6 +652,8 @@ def attendance_anomaly_reports(request):
         'end_date': end_date
     }
     return render(request, 'core/admin_anomaly_reports.html', context)
+=======
+>>>>>>> parent of ab78984 ( feat: improve attendance administration)
 =======
 >>>>>>> parent of ab78984 ( feat: improve attendance administration)
 =======
