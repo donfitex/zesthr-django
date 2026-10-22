@@ -31,6 +31,7 @@ from .services import schedules as schedules_service
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 from core.selectors import get_filtered_attendance, get_missing_punch_report, get_attendance_exceptions_report
 from core.services.attendance import submit_bulk_attendance, process_correction_request
@@ -54,6 +55,8 @@ from core.forms import BulkAttendanceForm
 >>>>>>> parent of 06a673d (feat: 1. Bulk Attendance Entry Form & View, Manager Correction Queue HTML Layout,  Attendance Tracking, Missing-Punch, & Exception Reports)
 =======
 >>>>>>> parent of 06a673d (feat: 1. Bulk Attendance Entry Form & View, Manager Correction Queue HTML Layout,  Attendance Tracking, Missing-Punch, & Exception Reports)
+=======
+>>>>>>> parent of ab78984 ( feat: improve attendance administration)
 def period(request):
     """Month/year filter shared by report, attendance log and payroll."""
     today = timezone.localdate()
@@ -563,6 +566,7 @@ def leave_action(request, pk):
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 @login_required
 @permission_required('core.view_attendance') # Removed raise_exception
@@ -684,3 +688,5 @@ def attendance_anomaly_reports(request):
 =======
     return render(request, 'core/admin_corrections_queue.html', context)
 >>>>>>> parent of 06a673d (feat: 1. Bulk Attendance Entry Form & View, Manager Correction Queue HTML Layout,  Attendance Tracking, Missing-Punch, & Exception Reports)
+=======
+>>>>>>> parent of ab78984 ( feat: improve attendance administration)
