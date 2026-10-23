@@ -1,0 +1,19 @@
+[project]
+name = "zesthr-django"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "Django>=5.2,<6.0",
+    "python-dotenv>=1.0",
+    "gunicorn>=22.0",
+    "whitenoise>=6.6",
+    "psycopg[binary]>=3.1",
+    "django-allauth>=65.3,<66.0",
+    "requests>=2.32,<3.0",
+]
+
+[tool.vercel]
+entrypoint = "payroll_project.wsgi:application"
+
+[tool.vercel.scripts]
+build = "python vercel_build.py"
