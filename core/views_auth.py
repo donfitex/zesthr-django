@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.contrib.auth import views as auth
 from django.urls import reverse_lazy
 from django.views.generic.edit import FormView
+from django.shortcuts import redirect, render
 
 from .forms_auth import PublicSignupForm
 from . import roles
@@ -29,12 +30,16 @@ class LoginView(auth.LoginView):
         return super().post(request, *args, **kwargs)
 
     def get_default_redirect_url(self):
-        # Staff and employees land on their dashboard; accounts without one (e.g. a system
-        # administrator) land on the home page instead of an "access denied" page.
         user = self.request.user
-        if user.has_perm(roles.VIEW_ALL_ATTENDANCE) or getattr(user, "employee_profile", None):
-            return super().get_default_redirect_url()
-        return str(reverse_lazy("home"))
+
+        if (
+            user.has_perm(roles.VIEW_ALL_ATTENDANCE)
+            or user.has_perm(roles.VIEW_EMPLOYEE)
+            or getattr(user, "employee_profile", None) is not None
+        ):
+            return str(reverse_lazy("dashboard"))
+
+        return str(reverse_lazy("account_pending"))
 
    
     def get_context_data(self, **kwargs):
@@ -112,3 +117,17 @@ class SignupView(FormView):
         )
 
         return super().form_valid(form)
+    
+def account_pending(request):
+    """Show the authorization message to accounts not linked to an employee."""
+    user = request.user
+
+    # Authorized HR users and linked employees must retain normal access.
+    if (
+        user.has_perm(roles.VIEW_ALL_ATTENDANCE)
+        or user.has_perm(roles.VIEW_EMPLOYEE)
+        or getattr(user, "employee_profile", None) is not None
+    ):
+        return redirect("dashboard")
+
+    return render(request, "account_pending.html")

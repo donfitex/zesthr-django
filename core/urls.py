@@ -14,6 +14,11 @@ urlpatterns = [
     path("password/reset/<uidb64>/<token>/", a.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("password/reset/complete/", auth.PasswordResetCompleteView.as_view(template_name="password_reset_complete.html"), name="password_reset_complete"),
     path("signup/", SignupView.as_view(), name="signup"),
+    path(
+    "account/pending/",
+    a.account_pending,
+    name="account_pending",
+    ),
     path("logout/", auth.LogoutView.as_view(), name="logout"),
     path("", v.home, name="home"),
     path("dashboard/", v.dashboard, name="dashboard"),
