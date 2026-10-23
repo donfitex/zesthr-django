@@ -114,6 +114,9 @@ amy = Employee.objects.create(name="Amy", designation="x", basic_salary=Decimal(
 Attendance.objects.create(emp=amy, date=date(2026, 1, 5), status="P")
 Salary.objects.create(emp=amy, month=1, year=2026, gross=3000.25, net=2900.10)
 LeaveApplication.objects.create(emp=amy, start_date=date(2026, 2, 2), end_date=date(2026, 2, 3), reason="r", status="APPROVED")
+from datetime import time
+from core.services import attendance
+attendance.check_in(amy, now=time(9), today=date(2026, 1, 6), by=u)
 """
 
     @classmethod
@@ -157,8 +160,9 @@ LeaveApplication.objects.create(emp=amy, start_date=date(2026, 2, 2), end_date=d
         check = self.manage(self.target, "shell", "-c", (
             "from core.models import *; a = Employee.objects.get(name='Amy'); "
             "print(a.user.username, a.manager.name, a.basic_salary, a.user.groups.filter(name='Employee').count(), "
-            "a.user.check_password('pw-12345-x'), Salary.objects.get().net, LeaveApplication.objects.get().status)"))
-        self.assertEqual(check.stdout.strip().splitlines()[-1], "amy Boss 3000.25 1 True 2900.10 APPROVED")
+            "a.user.check_password('pw-12345-x'), Salary.objects.get().net, LeaveApplication.objects.get().status, "
+            "AttendanceAudit.objects.count(), AttendanceAudit.objects.get().changed_by.username)"))
+        self.assertEqual(check.stdout.strip().splitlines()[-1], "amy Boss 3000.25 1 True 2900.10 APPROVED 1 amy")
 
     def test_dry_run_copies_nothing(self):
         r = self.copy("--dry-run")

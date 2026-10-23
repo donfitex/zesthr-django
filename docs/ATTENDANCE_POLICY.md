@@ -78,6 +78,19 @@ get their own "today" and clock time when punching, and the "no future dates" ru
    **Reject:** needs a note, changes nothing. A decision is final; simultaneous clicks apply exactly once.
 4. The employee is notified on their dashboard; reviewers see a count in the sidebar and on the dashboard.
 
+## Change history (audit)
+
+* **What is recorded:** every punch, HR status change, manual entry, correction (including approved correction
+  requests, linked back to the request) and deletion: the old values, the new values, who did it, when and why.
+* **Who can read it:** users with *view attendance audit* (HR Administrator, superusers) at
+  **Attendance > Change history**, filterable by employee, attendance day, change date, type, user and reason.
+* **Nobody can change it.** In the application the history tables only accept inserts. For attendance
+  history the database itself also refuses: any UPDATE of a row's content or any DELETE (even raw SQL) raises an
+  error. The only UPDATEs allowed are the links being cleared when the record or user they point to is deleted;
+  the employee, day, values, reason and time always stay. If a retention policy ever requires purging old
+  entries, that must be a deliberate migration that drops the triggers (see `0014_attendance_audit_triggers`).
+* **Deleted records stay traceable:** the history keeps the record id and day, and what the record said.
+
 ## Known limits
 
 * Overtime is not approved by a manager before it is paid; the daily maximum and threshold are the guard rails.

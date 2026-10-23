@@ -46,7 +46,6 @@ class Base(BaseTest):
         cls.alice.refresh_from_db()
         cls.bob.refresh_from_db()
         Attendance.objects.all().delete()
-        AttendanceAudit.objects.all().delete()
 
 
 # ------------------------------------------------------------------ save_manual / bulk

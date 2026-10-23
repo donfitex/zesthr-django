@@ -44,7 +44,7 @@
       <td>{{ r.rec.check_in|time:"H:i"|default:"-" }}</td>
       <td>{{ r.rec.check_out|time:"H:i"|default:"-" }}{% if r.rec.ends_next_day %} <small>(+1 day)</small>{% endif %}</td>
       <td>{% if r.day %}{% if r.day.late_minutes %}<span class="tag H">Late {{ r.day.late_text }}</span> {% endif %}{% if r.day.early_minutes %}<span class="tag H">Early {{ r.day.early_text }}</span> {% endif %}{% if r.day.overtime_minutes %}<span class="tag P">OT {{ r.day.overtime_text }}</span>{% endif %}{% else %}-{% endif %}</td>
-      <td class="row-actions">{% if r.rec %}{% if perms.core.change_attendance %}<a href="{% url 'attendance_edit' r.rec.pk %}">Edit</a>{% endif %}{% elif perms.core.add_attendance %}<a href="{% url 'attendance_add' %}?emp={{ r.emp.pk }}&date={{ day|date:'Y-m-d' }}">Add</a>{% endif %}</td>
+      <td class="row-actions">{% if r.rec %}{% if perms.core.change_attendance %}<a href="{% url 'attendance_edit' r.rec.pk %}">Edit</a>{% endif %}{% elif perms.core.add_attendance %}<a href="{% url 'attendance_add' %}?emp={{ r.emp.pk }}&date={{ day|date:'Y-m-d' }}">Add</a>{% endif %}{% if perms.core.view_attendance_audit %} <a href="{% url 'attendance_history' %}?emp={{ r.emp.pk }}&from={{ day|date:'Y-m-d' }}&to={{ day|date:'Y-m-d' }}">History</a>{% endif %}</td>
     </tr>{% empty %}<tr><td colspan="8" class="empty">No employees match.</td></tr>{% endfor %}
   </table></div></section>
 

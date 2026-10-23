@@ -23,7 +23,9 @@ from core import models as m
 
 LEGACY = "legacy"
 BUSINESS_MODELS = [m.Department, m.JobPosition, m.EmploymentType, m.WorkLocation, m.WorkSchedule,
-                   m.Employee, m.Attendance, m.Salary, m.LeaveApplication, m.Holiday]
+                   m.Employee, m.Attendance, m.Salary, m.LeaveApplication, m.Holiday,
+                   # history tables: a copy that silently lost these would be worse than one that lost data
+                   m.AttendanceAudit, m.AttendanceCorrectionRequest, m.EmploymentHistory]
 # Rows that migration 0007 creates in every fresh database. They are replaced by the
 # source's own employment types, so they do not count as "existing data" in the target.
 SEEDED_EMPLOYMENT_TYPES = {"Full-time", "Part-time", "Contract", "Intern", "Casual"}

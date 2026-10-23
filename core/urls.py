@@ -27,6 +27,7 @@ urlpatterns = [
     path("employees/<int:pk>/reactivate/", v.employee_reactivate, name="employee_reactivate"),
     path("attendance/register/", v.attendance_register, name="attendance_register"),
     path("attendance/bulk/", v.attendance_bulk, name="attendance_bulk"),
+    path("attendance/history/", v.attendance_history, name="attendance_history"),
     path("attendance/exceptions/", v.attendance_exceptions, name="attendance_exceptions"),
     path("attendance/missing-punches/", v.attendance_missing_punches, name="attendance_missing_punches"),
     path("attendance/corrections/", v.correction_list, name="correction_list"),

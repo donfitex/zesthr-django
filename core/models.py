@@ -48,6 +48,37 @@ class EmploymentType(models.Model):
         return self.name
 
 
+class AppendOnlyQuerySet(models.QuerySet):
+    """Audit rows can be added, never changed or removed through the ORM."""
+
+    def update(self, **kwargs):
+        raise ValidationError("Audit history cannot be modified.")
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ValidationError("Audit history cannot be modified.")
+
+    def delete(self):
+        raise ValidationError("Audit history cannot be deleted.")
+
+
+class AppendOnlyModel(models.Model):
+    """Base for history tables: insert-only. (Attendance history is additionally protected by database
+    triggers, see migration 0014.)"""
+
+    objects = AppendOnlyQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            raise ValidationError("Audit history cannot be modified.")
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError("Audit history cannot be deleted.")
+
+
 def validate_time_zone(value):
     from .timeutil import is_valid_zone
 
@@ -426,7 +457,7 @@ class AccountSecurity(models.Model):
         return f"Security state of {self.user}"
 
 
-class SecurityEvent(models.Model):
+class SecurityEvent(AppendOnlyModel):
     """Append-only audit trail of sign-ins and account changes. Never stores passwords."""
 
     LOGIN_SUCCESS, LOGIN_FAILED, LOGIN_BLOCKED, LOGOUT = "LOGIN_SUCCESS", "LOGIN_FAILED", "LOGIN_BLOCKED", "LOGOUT"
@@ -458,13 +489,9 @@ class SecurityEvent(models.Model):
     def __str__(self):
         return f"{self.get_event_type_display()}: {self.username or self.user_id}"
 
-    def save(self, *args, **kwargs):
-        if not self._state.adding:
-            raise ValidationError("Security events cannot be modified.")
-        super().save(*args, **kwargs)
 
 
-class EmploymentHistory(models.Model):
+class EmploymentHistory(AppendOnlyModel):
     """Append-only record of changes to an employee's job details (who, when, from what to what).
 
     Values are stored as text so the history stays readable after a department or position
@@ -487,13 +514,9 @@ class EmploymentHistory(models.Model):
     def __str__(self):
         return f"{self.employee_id}: {self.field} {self.old_value!r} -> {self.new_value!r}"
 
-    def save(self, *args, **kwargs):
-        if not self._state.adding:
-            raise ValidationError("Employment history cannot be modified.")
-        super().save(*args, **kwargs)
 
 
-class AttendanceAudit(models.Model):
+class AttendanceAudit(AppendOnlyModel):
     """Append-only trail of every attendance change: what it was, what it became, who and why.
 
     Survives deletion of the attendance row (record_id and date are copied), and the
@@ -527,10 +550,6 @@ class AttendanceAudit(models.Model):
     def __str__(self):
         return f"{self.get_action_display()}: {self.emp_id} {self.date}"
 
-    def save(self, *args, **kwargs):
-        if not self._state.adding:
-            raise ValidationError("Attendance history cannot be modified.")
-        super().save(*args, **kwargs)
 
 
 class AttendanceCorrectionRequest(models.Model):

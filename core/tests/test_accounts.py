@@ -91,7 +91,7 @@ class LockoutTests(BaseTest):
     def test_block_is_case_insensitive_and_expires(self):
         self.fail("Alice", n=5)
         self.assertEqual(self.client.post(reverse("login"), LOGIN("ALICE"), REMOTE_ADDR="198.51.100.1").status_code, 429)
-        SecurityEvent.objects.all().delete()  # equivalent to the window passing
+        SecurityEvent.objects.all()._raw_delete(using="default")  # the ORM refuses; this stands in for the window passing
         self.assertEqual(self.client.post(reverse("login"), LOGIN("alice"), REMOTE_ADDR="198.51.100.1").status_code, 302)
 
     def test_a_successful_login_resets_the_counter(self):

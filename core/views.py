@@ -24,6 +24,7 @@ from .models import (Attendance, AttendanceAudit, AttendanceCorrectionRequest, D
 from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
                           require_employee_profile, require_perm)
 from .services import attendance as attendance_service
+from .services import audit as audit_service
 from .services import corrections as corrections_service
 from .services import exceptions as exceptions_service
 from .services import employees as employee_service
@@ -586,6 +587,45 @@ def correction_decide(request, pk):
         except attendance_service.AttendanceError as exc:
             messages.error(request, str(exc))
     return redirect(request.POST.get("next") if request.POST.get("next", "").startswith("/") else "correction_list")
+
+
+@permission_required(roles.VIEW_ATTENDANCE_AUDIT)
+def attendance_history(request):
+    """Who changed which attendance record, when, from what to what, and why. Read-only."""
+    g = request.GET
+    qs = AttendanceAudit.objects.select_related("emp", "emp__user", "changed_by", "correction_request")
+    if g.get("emp", "").isdigit():
+        qs = qs.filter(emp_id=int(g["emp"]))
+    d_from, d_to = _parse_date(g.get("from")), _parse_date(g.get("to"))
+    if d_from:
+        qs = qs.filter(date__gte=d_from)
+    if d_to:
+        qs = qs.filter(date__lte=d_to)
+    c_from, c_to = _parse_date(g.get("changed_from")), _parse_date(g.get("changed_to"))
+    if c_from:
+        qs = qs.filter(created_at__date__gte=c_from)
+    if c_to:
+        qs = qs.filter(created_at__date__lte=c_to)
+    action = g.get("action", "")
+    if action in dict(AttendanceAudit.ACTIONS):
+        qs = qs.filter(action=action)
+    else:
+        action = ""
+    by = g.get("by", "").strip()
+    if by:
+        qs = qs.filter(changed_by__username__icontains=by)
+    q = g.get("q", "").strip()
+    if q:
+        qs = qs.filter(reason__icontains=q)
+    page = Paginator(qs, 50).get_page(g.get("page"))
+    for entry in page:
+        entry.changes = audit_service.describe(entry)
+        entry.by_self = entry.changed_by_id is not None and entry.changed_by_id == entry.emp.user_id
+    return render(request, "attendance_history.html", {
+        "page": page, "total": page.paginator.count, "employees": Employee.objects.all(),
+        "actions": AttendanceAudit.ACTIONS, "emp": g.get("emp", ""), "d_from": g.get("from", "") if d_from else "",
+        "d_to": g.get("to", "") if d_to else "", "c_from": g.get("changed_from", "") if c_from else "",
+        "c_to": g.get("changed_to", "") if c_to else "", "action": action, "by": by, "q": q})
 
 
 def _exceptions(request, preset):

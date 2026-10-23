@@ -55,6 +55,7 @@
       <a class="{% if n == 'attendance_register' %}on{% endif %}" href="{% url 'attendance_register' %}">Daily register</a>
       <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">Attendance log</a>
       <a class="{% if n == 'attendance_exceptions' %}on{% endif %}" href="{% url 'attendance_exceptions' %}">Exceptions</a>
+      {% if perms.core.view_attendance_audit %}<a class="{% if n == 'attendance_history' %}on{% endif %}" href="{% url 'attendance_history' %}">Change history</a>{% endif %}
       <a class="{% if n == 'attendance_missing_punches' %}on{% endif %}" href="{% url 'attendance_missing_punches' %}">Missing punches</a>
       {% if is_correction_reviewer %}<a class="{% if n == 'correction_list' %}on{% endif %}" href="{% url 'correction_list' %}">Correction requests{% if pending_corrections %} <span class="hros-badge">{{ pending_corrections }}</span>{% endif %}</a>{% endif %}
       {% if perms.core.add_attendance %}<a class="{% if n == 'attendance_add' %}on{% endif %}" href="{% url 'attendance_add' %}">Add manual entry</a>{% endif %}
