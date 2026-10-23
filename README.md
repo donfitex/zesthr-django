@@ -1,7 +1,7 @@
 # HROS: Human Resources Operating System (Django)
 
 Track daily attendance and generate monthly salary slips with automated loss-of-pay deductions.
-Stack: Python, Django, SQL (SQLite), HTML, CSS.
+Stack: Python, Django, PostgreSQL in production (Supabase), SQLite for local development, HTML, CSS.
 
 ## Run it
 ```bash
@@ -10,24 +10,13 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python manage.py makemigrations core
 python manage.py migrate
-python manage.py seed_demo      # seeds HR Admin, 10 employees with logins, 2026 Indian holidays, and attendance
 python manage.py runserver
 ```
 Open http://127.0.0.1:8000/ to explore the **HROS Home Page** and sign in.
 
-### Demo Credentials
-- **HR Administrator**: `admin` / `admin123`
-- **Employee Accounts** (10 accounts, password `emp123` for all):
-  1. `aarav.sharma` (Senior Software Engineer)
-  2. `priya.patel` (UI/UX Designer)
-  3. `rohit.verma` (Backend Developer)
-  4. `ananya.iyer` (HR Specialist)
-  5. `vikram.singh` (DevOps Engineer)
-  6. `neha.gupta` (QA Automation Engineer)
-  7. `karan.mehta` (Financial Analyst)
-  8. `sneha.reddy` (Growth Marketer)
-  9. `arjun.nair` (Product Manager)
-  10. `pooja.joshi` (Operations Associate)
+### Sample data (local development only)
+
+The optional `seed_demo` command creates test accounts with known passwords. It is guarded by `DEBUG=True`; use it only in a disposable local development database, never in production. The command is not run automatically. Do not expose demo credentials or seed demo users into the production Supabase database.
 
 ## Modules & Features
 - **Home**: Product landing page with HROS brand logo, feature highlights, live architecture preview, interactive payroll calculator, and credentials sandbox.
@@ -47,6 +36,10 @@ Open http://127.0.0.1:8000/ to explore the **HROS Home Page** and sign in.
 `per_day_pay = basic / days in month`  
 `absent_days = absent + half-days / 2` (approved leave `L` is fully exempt from deduction)  
 `net = basic - (absent_days x per_day_pay)`  
+
+## Deployment layout
+
+The repository root must contain `manage.py`, `requirements.txt`, `vercel.json`, `api/index.py`, and the `payroll_project/` and `core/` packages. In Vercel, set the project Root Directory to the directory containing `vercel.json` and `manage.py` (normally `.`). Push changes to the configured Git branch, then redeploy the new commit. If the deployment still serves old templates, inspect the deployment commit SHA and use **Redeploy without Build Cache**.
 
 ## Files
 - `core/models.py`: Employee, Attendance, Salary, Holiday, LeaveApplication

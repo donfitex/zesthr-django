@@ -213,3 +213,6 @@ htmlcov/
 .vercel
 .env*.local
 staticfiles/
+# Vercel and collected static assets
+.vercel/
+staticfiles/
