@@ -1,1 +1,6 @@
--r requirements/development.txt
+Django>=5.2,<6.0
+python-dotenv>=1.0
+gunicorn>=22.0
+whitenoise>=6.6
+psycopg[binary]>=3.1
+
