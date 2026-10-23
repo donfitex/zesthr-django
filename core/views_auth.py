@@ -40,9 +40,6 @@ class LoginView(auth.LoginView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         
-        #  Demo credentials are shown only on a development machine.
-        context["show_demo"] = settings.DEBUG
-
         context["google_login_enabled"] = bool(
             settings.GOOGLE_OAUTH_CLIENT_ID
             and settings.GOOGLE_OAUTH_CLIENT_SECRET
