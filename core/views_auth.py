@@ -3,7 +3,9 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import views as auth
 from django.urls import reverse_lazy
+from django.views.generic.edit import FormView
 
+from .forms_auth import PublicSignupForm
 from . import roles
 from .models import SecurityEvent
 from .services import accounts
@@ -75,3 +77,21 @@ class PasswordResetConfirmView(auth.PasswordResetConfirmView):
         accounts.mark_password_changed(self.user)
         accounts.record_event(SecurityEvent.PASSWORD_RESET_COMPLETED, request=self.request, user=self.user)
         return response
+
+
+class SignupView(FormView):
+    template_name = "signup.html"
+    form_class = PublicSignupForm
+    success_url = reverse_lazy("login")
+
+    def form_valid(self, form):
+        form.save()
+
+        messages.success(
+            self.request,
+            "Your account has been created. You can now sign in. "
+            "HR authorization is required before you can access "
+            "employee, attendance, or payroll information.",
+        )
+
+        return super().form_valid(form)
