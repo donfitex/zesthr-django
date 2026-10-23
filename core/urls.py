@@ -2,6 +2,7 @@ from django.contrib.auth import views as auth
 from django.contrib.auth.decorators import login_required
 from django.urls import path
 
+from .views_auth import SignupView
 from . import views as v
 from . import views_auth as a
 
@@ -12,6 +13,7 @@ urlpatterns = [
     path("password/reset/sent/", auth.PasswordResetDoneView.as_view(template_name="password_reset_done.html"), name="password_reset_done"),
     path("password/reset/<uidb64>/<token>/", a.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
     path("password/reset/complete/", auth.PasswordResetCompleteView.as_view(template_name="password_reset_complete.html"), name="password_reset_complete"),
+    path("signup/", SignupView.as_view(), name="signup"),
     path("logout/", auth.LogoutView.as_view(), name="logout"),
     path("", v.home, name="home"),
     path("dashboard/", v.dashboard, name="dashboard"),
