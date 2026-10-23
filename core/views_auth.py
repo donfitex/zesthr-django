@@ -36,10 +36,19 @@ class LoginView(auth.LoginView):
             return super().get_default_redirect_url()
         return str(reverse_lazy("home"))
 
+   
     def get_context_data(self, **kwargs):
-        # Demo credentials are shown only on a development machine.
-        return super().get_context_data(show_demo=settings.DEBUG, **kwargs)
+        context = super().get_context_data(**kwargs)
+        
+        #  Demo credentials are shown only on a development machine.
+        context["show_demo"] = settings.DEBUG
 
+        context["google_login_enabled"] = bool(
+            settings.GOOGLE_OAUTH_CLIENT_ID
+            and settings.GOOGLE_OAUTH_CLIENT_SECRET
+        )
+
+        return context
 
 class PasswordChangeView(auth.PasswordChangeView):
     template_name = "password_change.html"
@@ -78,20 +87,31 @@ class PasswordResetConfirmView(auth.PasswordResetConfirmView):
         accounts.record_event(SecurityEvent.PASSWORD_RESET_COMPLETED, request=self.request, user=self.user)
         return response
 
-
 class SignupView(FormView):
     template_name = "signup.html"
     form_class = PublicSignupForm
     success_url = reverse_lazy("login")
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        context["google_login_enabled"] = bool(
+            settings.GOOGLE_OAUTH_CLIENT_ID
+            and settings.GOOGLE_OAUTH_CLIENT_SECRET
+        )
+
+        return context
 
     def form_valid(self, form):
         form.save()
 
         messages.success(
             self.request,
-            "Your account has been created. You can now sign in. "
-            "HR authorization is required before you can access "
-            "employee, attendance, or payroll information.",
+            (
+                "Your HROS account has been created successfully. "
+                "You can now sign in. HR authorization is required "
+                "before you can access employee, attendance, or payroll information."
+            ),
         )
 
         return super().form_valid(form)
