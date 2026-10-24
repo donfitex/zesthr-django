@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "payroll_project/wsgi.py": {
+      "maxDuration": 60,
+      "excludeFiles": "{docs/**,core/tests/**,**/__pycache__/**,**/*.sqlite3,venv/**,.venv/**,.git/**}"
+    }
+  }
+}

@@ -10,7 +10,9 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import ProtectedError, Q, Sum
-from django.http import Http404
+from django.db import connection
+from django.http import Http404, JsonResponse
+from django.views.decorators.http import require_safe
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
@@ -437,6 +439,21 @@ class AttendanceDelete(PermissionRequiredMixin, Base, DeleteView):
                 AttendanceAudit.MANUAL_DELETE, rec, attendance_service.snapshot(rec), by=self.request.user,
                 reason=reason, deleted=True, day=rec.date, emp=rec.emp)
             return super().form_valid(form)
+
+
+@require_safe
+def healthz(request):
+    """For uptime monitors and deploy checks: is the app up, and can it reach its database?
+    Public on purpose and reveals nothing beyond ok / unavailable."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        response = JsonResponse({"status": "ok"})
+    except Exception:
+        response = JsonResponse({"status": "unavailable"}, status=503)
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 # ---------- Register, bulk entry, corrections, exceptions ----------

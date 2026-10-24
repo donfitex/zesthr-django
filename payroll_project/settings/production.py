@@ -17,6 +17,17 @@ DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
+# --- Vercel -----------------------------------------------------------------
+# Vercel gives every deployment its own address and tells us about it through system
+# environment variables (enable "Automatically expose System Environment Variables" in the
+# project settings). Only those exact addresses are added; no wildcard like *.vercel.app.
+if env_bool("VERCEL", False):
+    for _var in ("VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_URL", "VERCEL_BRANCH_URL"):
+        _host = env(_var, "").strip().removeprefix("https://").removeprefix("http://").rstrip("/")
+        if _host and _host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(_host)
+            CSRF_TRUSTED_ORIGINS.append(f"https://{_host}")
+
 # --- HTTPS and transport security ------------------------------------------
 # Redirect all HTTP requests to HTTPS. Turn off only for a first smoke test
 # before your certificate exists.
@@ -68,19 +79,32 @@ if _sslmode not in ("disable", "allow", "prefer", "require", "verify-ca", "verif
     raise ImproperlyConfigured(f"DB_SSLMODE={_sslmode!r} is not a valid PostgreSQL sslmode.")
 _db.pop("SSLMODE", None)
 
+# DB_POOLED=True is the one switch for serverless hosting (Vercel) or any connection pooler
+# (Neon's "pooled" address, Supabase pooler, pgbouncer in transaction mode): every request may run
+# in a fresh process, so connections are not kept open, server-side cursors are off, and
+# psycopg does not prepare statements (a pooler may hand the next query to a different server).
+_pooled = env_bool("DB_POOLED", False)
+_options = {"sslmode": _sslmode, "connect_timeout": int(env("DB_CONNECT_TIMEOUT", "10"))}
+if _pooled:
+    _options["prepare_threshold"] = None
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         **_db,
-        "CONN_MAX_AGE": int(env("DB_CONN_MAX_AGE", "60")),
+        "CONN_MAX_AGE": int(env("DB_CONN_MAX_AGE", "0" if _pooled else "60")),
         "CONN_HEALTH_CHECKS": True,  # drop a persistent connection the server has closed
-        # Required when connecting through a transaction pooler such as pgbouncer / Neon's pooler.
-        "DISABLE_SERVER_SIDE_CURSORS": env_bool("DB_DISABLE_SERVER_SIDE_CURSORS", False),
-        "OPTIONS": {"sslmode": _sslmode, "connect_timeout": int(env("DB_CONNECT_TIMEOUT", "10"))},
+        "DISABLE_SERVER_SIDE_CURSORS": env_bool("DB_DISABLE_SERVER_SIDE_CURSORS", _pooled),
+        "OPTIONS": _options,
     }
 }
 
-# --- Static files (served by WhiteNoise behind gunicorn) -------------------
+# --- Static files -----------------------------------------------------------
+# Behind gunicorn (Docker, a VM) WhiteNoise serves them. On Vercel the CDN serves the files that
+# `collectstatic` produced during the build, and WhiteNoise stays idle.
+# Not strict: a file missing from the build manifest falls back to its plain URL instead of
+# turning every page into an error.
+WHITENOISE_MANIFEST_STRICT = False
 MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
