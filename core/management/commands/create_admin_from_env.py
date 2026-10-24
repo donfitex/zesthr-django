@@ -46,3 +46,4 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS("Superuser created successfully.")
         )
+

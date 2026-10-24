@@ -13,3 +13,5 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+core/management/commands/create_admin_from_env.py
