@@ -9,11 +9,12 @@
   ],
   "routes": [
     {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "payroll_project/wsgi.py"
     }
-  ],
-  "scripts": {
-    "vercel-build": "python3 manage.py migrate --noinput"
-  }
+  ]
 }
