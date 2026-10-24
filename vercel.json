@@ -1,9 +1,19 @@
 {
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "payroll_project/wsgi.py": {
-      "maxDuration": 60,
-      "excludeFiles": "{docs/**,core/tests/**,**/__pycache__/**,**/*.sqlite3,venv/**,.venv/**,.git/**}"
+  "version": 2,
+  "builds": [
+    {
+      "src": "payroll_project/wsgi.py",
+      "use": "@vercel/python",
+      "config": { "maxDuration": 90 }
     }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "payroll_project/wsgi.py"
+    }
+  ],
+  "scripts": {
+    "vercel-build": "python3 manage.py migrate --noinput"
   }
 }
