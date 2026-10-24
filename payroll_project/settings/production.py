@@ -17,18 +17,7 @@ DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
-# --- Vercel -----------------------------------------------------------------
-# Vercel gives every deployment its own address and tells us about it through system
-# environment variables (enable "Automatically expose System Environment Variables" in the
-# project settings). Only those exact addresses are added; no wildcard like *.vercel.app.
-if env_bool("VERCEL", False):
-    for _var in ("VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_URL", "VERCEL_BRANCH_URL"):
-        _host = env(_var, "").strip().removeprefix("https://").removeprefix("http://").rstrip("/")
-        if _host and _host not in ALLOWED_HOSTS:
-            ALLOWED_HOSTS.append(_host)
-            CSRF_TRUSTED_ORIGINS.append(f"https://{_host}")
-
-# --- HTTPS and transport security ------------------------------------------
+# --- HTTPS and transport security / Render reverse proxy ------------------------------------------
 # Redirect all HTTP requests to HTTPS. Turn off only for a first smoke test
 # before your certificate exists.
 SECURE_SSL_REDIRECT = env_bool("DJANGO_SSL_REDIRECT", True)
@@ -37,8 +26,16 @@ SECURE_SSL_REDIRECT = env_bool("DJANGO_SSL_REDIRECT", True)
 # only sees plain HTTP. Set DJANGO_TRUST_PROXY_SSL_HEADER=True ONLY if your proxy
 # sets X-Forwarded-Proto itself and strips any value sent by the client;
 # otherwise visitors could spoof it, and without it you get a redirect loop.
-if env_bool("DJANGO_TRUST_PROXY_SSL_HEADER", False):
-    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Render terminates HTTPS at its proxy and forwards the request to Django.
+if env_bool("DJANGO_TRUST_PROXY_SSL_HEADER", True):
+    SECURE_PROXY_SSL_HEADER = (
+        "HTTP_X_FORWARDED_PROTO",
+        "https",
+    )
+
+# ---------------------------------------------------------------------------
+# HSTS
+# ---------------------------------------------------------------------------
 
 # HSTS makes browsers refuse plain HTTP for the whole period, and is hard to
 # undo. Leave at 0 until HTTPS works everywhere, then raise gradually:
@@ -63,18 +60,29 @@ X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 
-# --- Database (PostgreSQL) ------------------------------------------------
-# Either one DATABASE_URL (what hosted providers give you) or the separate DB_* values.
-if env("DATABASE_URL"):
-    _db = parse_database_url(env("DATABASE_URL"))
+# ---------------------------------------------------------------------------
+# Database - Supabase PostgreSQL
+# ---------------------------------------------------------------------------
+
+DATABASE_URL = env("DATABASE_URL", "").strip()
+
+if DATABASE_URL:
+    _db = parse_database_url(DATABASE_URL)
+
 else:
-    _db = {"NAME": require_env("DB_NAME"), "USER": require_env("DB_USER"),
-           "PASSWORD": require_env("DB_PASSWORD"), "HOST": require_env("DB_HOST"),
-           "PORT": env("DB_PORT", "5432"), "SSLMODE": None}
+    _db = {
+        "NAME": require_env("DB_NAME"),
+        "USER": require_env("DB_USER"),
+        "PASSWORD": require_env("DB_PASSWORD"),
+        "HOST": require_env("DB_HOST"),
+        "PORT": env("DB_PORT", "5432"),
+        "SSLMODE": None,
+    }
+
 
 # Encrypted connection by default; set DB_SSLMODE=disable only for a database on the
 # same private network (e.g. a local Docker container).
-_sslmode = env("DB_SSLMODE") or _db.pop("SSLMODE") or "require"
+_sslmode = env("DB_SSLMODE") or _db.pop("SSLMODE", None) or "require"
 if _sslmode not in ("disable", "allow", "prefer", "require", "verify-ca", "verify-full"):
     raise ImproperlyConfigured(f"DB_SSLMODE={_sslmode!r} is not a valid PostgreSQL sslmode.")
 _db.pop("SSLMODE", None)
@@ -129,7 +137,7 @@ LOGGING["formatters"]["simple"]["format"] = (  # noqa: F405
     "%(asctime)s %(levelname)s %(name)s: %(message)s"
 )
 
-# --- Startup validation ---------------------------------------------------
+# --- Startup/Production validation ---------------------------------------------------
 if DEBUG:
     raise ImproperlyConfigured("DJANGO_DEBUG must be False in production.")
 if len(SECRET_KEY) < 50 or SECRET_KEY.startswith("django-insecure") or "dev-only" in SECRET_KEY:
