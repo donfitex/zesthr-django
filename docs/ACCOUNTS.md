@@ -16,6 +16,10 @@
 * 5 failed attempts for the same username from the same address within 15 minutes block further attempts
   (HTTP 429, the same message for unknown names). A successful sign-in resets the count; the block lifts
   by itself. Tune with `DJANGO_LOGIN_MAX_FAILURES` and `DJANGO_LOGIN_FAILURE_WINDOW_MINUTES`.
+* Password-reset emails are limited to 5 requests for the same submitted address from the same address
+  within 15 minutes. Excess requests receive the standard success response and send no email, preventing
+  account enumeration. Tune with `DJANGO_PASSWORD_RESET_MAX_REQUESTS` and
+  `DJANGO_PASSWORD_RESET_WINDOW_MINUTES`.
 * The login page shows demo credentials **only** when `DEBUG` is on.
 
 ## Audit log
@@ -39,4 +43,3 @@ Development prints emails to the terminal. Production requires `DJANGO_EMAIL_HOS
 
 * No two-factor authentication yet.
 * No automatic purge of old security events (a retention job comes with the operations phase).
-* Password-reset requests are logged but not rate-limited.

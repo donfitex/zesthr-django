@@ -237,7 +237,7 @@ class PasswordResetTests(BaseTest):
         return self.client.post(reverse("password_reset"), {"email": email})
 
     def link(self):
-        return re.search(r"https?://testserver(/\S+)", mail.outbox[-1].body).group(1)
+        return re.search(r"https?://[^/]+(/\S+)", mail.outbox[-1].body).group(1)
 
     def test_known_address_gets_one_email_with_a_working_link(self):
         r = self.request_reset()
@@ -253,6 +253,18 @@ class PasswordResetTests(BaseTest):
         for email in ("nobody@example.com", "alice@example.com"):
             self.assertRedirects(self.request_reset(email), reverse("password_reset_done"))
         self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(PASSWORD_RESET_MAX_REQUESTS=2, PASSWORD_RESET_WINDOW_MINUTES=15)
+    def test_reset_requests_are_rate_limited_without_changing_the_response(self):
+        first = self.request_reset()
+        second = self.request_reset()
+        limited = self.request_reset()
+
+        self.assertRedirects(first, reverse("password_reset_done"))
+        self.assertRedirects(second, reverse("password_reset_done"))
+        self.assertRedirects(limited, reverse("password_reset_done"))
+        self.assertEqual(len(mail.outbox), 2)
+        self.assertEqual(events("PASSWORD_RESET_REQUESTED").count(), 2)
 
     def test_full_reset_flow_and_the_link_works_only_once(self):
         self.request_reset()

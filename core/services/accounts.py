@@ -53,6 +53,21 @@ def is_login_blocked(username, ip):
     return bool(username) and recent_failures(username, ip) >= settings.LOGIN_MAX_FAILURES
 
 
+# --- password reset throttling -------------------------------------------------------
+def is_password_reset_blocked(identifier, ip):
+    """Limit reset-email requests without revealing whether an account exists."""
+    if not identifier:
+        return False
+    window_start = timezone.now() - timedelta(minutes=settings.PASSWORD_RESET_WINDOW_MINUTES)
+    requests = SecurityEvent.objects.filter(
+        username__iexact=identifier,
+        ip_address=ip,
+        event_type=SecurityEvent.PASSWORD_RESET_REQUESTED,
+        created_at__gte=window_start,
+    )
+    return requests.count() >= settings.PASSWORD_RESET_MAX_REQUESTS
+
+
 # --- password state -------------------------------------------------------------------
 def must_change_password(user):
     return AccountSecurity.objects.filter(user=user, must_change_password=True).exists()

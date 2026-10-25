@@ -74,8 +74,12 @@ class PasswordResetView(auth.PasswordResetView):
     success_url = reverse_lazy("password_reset_done")
 
     def form_valid(self, form):
+        email = form.cleaned_data["email"].strip()
+        if accounts.is_password_reset_blocked(email, accounts.client_ip(self.request)):
+            # Keep the normal response so this endpoint cannot disclose account state.
+            return redirect(self.success_url)
         accounts.record_event(SecurityEvent.PASSWORD_RESET_REQUESTED, request=self.request,
-                              username=form.cleaned_data["email"])
+                              username=email)
         return super().form_valid(form)  # always says "if that address exists..." (no account enumeration)
 
 
