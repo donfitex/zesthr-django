@@ -10,6 +10,7 @@ from django.urls import reverse
 from core import roles, selectors
 from core.models import Attendance, Department, Employee, EmploymentType, JobPosition, WorkSchedule, validate_working_days
 from core.services import employees as svc
+from apps.organizations.models import Organization
 
 from .test_permissions import BaseTest, make_user
 
@@ -35,6 +36,14 @@ class EmployeeIdentifierTests(TestCase):
     def test_blank_number_does_not_collide(self):
         self.assertEqual(emp("A", employee_number="").employee_number[:4], "EMP-")
         self.assertEqual(emp("B", employee_number="  ").employee_number[:4], "EMP-")
+
+    def test_legacy_compatible_creates_use_the_default_organization(self):
+        department = Department.objects.create(name="Operations", code="OPS")
+        employee = emp("A", department=department)
+
+        self.assertEqual(department.organization.code, "DEFAULT")
+        self.assertEqual(employee.organization, department.organization)
+        self.assertEqual(Organization.objects.filter(code="DEFAULT").count(), 1)
 
 
 class StatusTests(TestCase):

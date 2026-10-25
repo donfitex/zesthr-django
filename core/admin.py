@@ -12,8 +12,8 @@ from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Emp
 class EmployeeAdmin(admin.ModelAdmin):
     """The admin site must not be a back door around the role rules."""
 
-    list_display = ("employee_number", "name", "department", "position", "employment_status")
-    list_filter = ("employment_status", "department")
+    list_display = ("employee_number", "name", "organization", "department", "position", "employment_status")
+    list_filter = ("organization", "employment_status", "department")
     search_fields = ("name", "designation", "employee_number")
 
     # Lifecycle changes go through the app's Deactivate/Reactivate actions, which also
@@ -22,7 +22,7 @@ class EmployeeAdmin(admin.ModelAdmin):
 
     def get_fields(self, request, obj=None):
         fields = ["user", "employee_number", "name", "designation", "basic_salary", "email", "phone",
-                  "joined_on", "department", "position", "employment_type", "work_location",
+                  "joined_on", "organization", "department", "position", "employment_type", "work_location",
                   "work_schedule", "manager", "confirmation_date", *self.LIFECYCLE_FIELDS]
         u = request.user
         if not (u.has_perm(roles.VIEW_EMPLOYEE_PAY) or u.has_perm(roles.CHANGE_EMPLOYEE_PAY)):

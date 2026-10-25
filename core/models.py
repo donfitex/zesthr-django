@@ -2,13 +2,26 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.models import User
+from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
 
+def default_organization():
+    """Return the compatibility tenant used by records created before tenant setup."""
+    Organization = apps.get_model("organizations", "Organization")
+    organization, _ = Organization.objects.get_or_create(
+        code="DEFAULT",
+        defaults={"name": "Default Organization"},
+    )
+    return organization
+
+
 class Department(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name="departments")
     name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=10, unique=True, help_text="Short code, e.g. FIN")
     work_schedule = models.ForeignKey("WorkSchedule", on_delete=models.PROTECT, null=True, blank=True,
@@ -21,6 +34,11 @@ class Department(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.organization_id:
+            self.organization = default_organization()
+        super().save(*args, **kwargs)
 
 
 class JobPosition(models.Model):
@@ -184,6 +202,8 @@ class Employee(models.Model):
 
     employee_number = models.CharField(max_length=20, unique=True, null=True, blank=True,
                                        help_text="Leave blank to generate automatically (EMP-00001)")
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name="employees")
     department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
     position = models.ForeignKey(JobPosition, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
     employment_type = models.ForeignKey(EmploymentType, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
@@ -258,6 +278,8 @@ class Employee(models.Model):
 
     def save(self, *args, **kwargs):
         self.is_active = self.employment_status in self.ACTIVE_STATUSES
+        if not self.organization_id:
+            self.organization = default_organization()
         self.employee_number = (self.employee_number or "").strip() or None
         super().save(*args, **kwargs)
         if self.employee_number is None:
@@ -1046,4 +1068,3 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.title
-    
