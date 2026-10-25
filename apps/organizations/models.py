@@ -3,6 +3,7 @@
 These models are intentionally independent of legacy employee records. Employee
 assignment is added in the subsequent, data-migrated organization-scope step.
 """
+from django.conf import settings
 from django.core.validators import RegexValidator
 from django.db import models
 
@@ -22,6 +23,19 @@ class Organization(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class OrganizationMembership(models.Model):
+    """Explicit tenant scope for users who may operate on an organization."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="organization_memberships")
+    organization = models.ForeignKey(Organization, on_delete=models.PROTECT, related_name="memberships")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["user", "organization"], name="user_organization_membership_unique")]
+
+    def __str__(self):
+        return f"{self.user} @ {self.organization}"
 
 
 class Company(models.Model):

@@ -8,6 +8,7 @@ from django.urls import reverse
 from core import roles
 from core.models import Attendance, Employee, LeaveApplication, Salary
 from core.roles import ROLE_PERMISSIONS, sync_roles
+from apps.organizations.models import Organization, OrganizationMembership
 
 
 def make_user(username, role=None, **extra):
@@ -200,6 +201,19 @@ class NoRoleUsersTests(BaseTest):
         self.hr_admin.save()
         self.client.force_login(self.hr_admin)
         self.assertEqual(self.client.get(reverse("employee_list")).status_code, 302)
+
+
+class TenantIsolationTests(BaseTest):
+    def test_hr_cannot_open_an_employee_profile_from_another_organization(self):
+        default_org = self.alice.organization
+        other_org = Organization.objects.create(name="Other Organization", code="OTHER")
+        outsider = Employee.objects.create(
+            name="Outsider", designation="Dev", basic_salary=Decimal("30000"), organization=other_org
+        )
+        OrganizationMembership.objects.create(user=self.hr_admin, organization=default_org)
+
+        self.login(self.hr_admin)
+        self.assertEqual(self.client.get(reverse("employee_detail", args=[outsider.pk])).status_code, 404)
 
 
 class RoleCapabilityTests(BaseTest):

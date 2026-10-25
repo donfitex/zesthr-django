@@ -20,6 +20,8 @@ from django.views.decorators.http import require_safe
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
+
+from apps.organizations.tenancy import scope_queryset
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from . import roles, selectors, timeutil
@@ -150,7 +152,10 @@ class EmployeeList(PermissionRequiredMixin, ListView):
 
     def get_queryset(self):
         f = self.filters()
-        qs = Employee.objects.select_related("department", "position")
+        qs = scope_queryset(
+            Employee.objects.select_related("organization", "department", "position"),
+            self.request.user,
+        )
         if f["q"]:
             qs = qs.filter(Q(name__icontains=f["q"]) | Q(designation__icontains=f["q"])
                            | Q(employee_number__icontains=f["q"]) | Q(email__icontains=f["q"])
@@ -165,15 +170,16 @@ class EmployeeList(PermissionRequiredMixin, ListView):
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
-        ctx.update(self.filters(), departments=Department.objects.all(), statuses=Employee.STATUS,
+        ctx.update(self.filters(), departments=scope_queryset(Department.objects.all(), self.request.user), statuses=Employee.STATUS,
                    total_matches=ctx["paginator"].count)
         return ctx
 
 
 @login_required
 def employee_detail(request, pk):
-    emp = get_object_or_404(Employee.objects.select_related(
-        "department", "position", "employment_type", "work_location", "work_schedule", "manager", "user"), pk=pk)
+    emp = get_object_or_404(scope_queryset(Employee.objects.select_related(
+        "department", "position", "employment_type", "work_location", "work_schedule", "manager", "user"),
+        request.user), pk=pk)
     access = employee_access(request.user, emp)
     if not access.can_view:
         raise Http404  # not "forbidden": do not even confirm that this employee exists

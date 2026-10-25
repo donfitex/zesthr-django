@@ -272,7 +272,8 @@ class SearchAndPaginationTests(ProfileTestBase):
             self.client.get(reverse("employee_list"))
         # fixed overhead (session, user, password flag, permissions, nav badge) plus the page itself;
         # what matters is that this stays flat as rows are added
-        self.assertLessEqual(len(ctx), 14, [q["sql"][:80] for q in ctx])
+        # Tenant membership resolution adds a bounded, cached authorization lookup.
+        self.assertLessEqual(len(ctx), 15, [q["sql"][:80] for q in ctx])
 
     def test_list_links_to_profiles_and_hides_pay_from_hr_officer(self):
         r = self.get(q="Staff 01")
