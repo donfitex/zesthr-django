@@ -597,3 +597,303 @@ class AttendanceCorrectionRequest(models.Model):
             times += f" - {self.requested_check_out:%H:%M}" if self.requested_check_out else " - --"
             times += " (+1 day)" if self.requested_ends_next_day else ""
         return f"{label}{times}"
+
+
+class PayrollComponent(models.Model):
+    """
+    Reusable earning/deduction definition.
+
+    Examples:
+    - Housing Allowance
+    - Transport Allowance
+    - Medical Allowance
+    - Pension
+    - Loan Deduction
+    """
+
+    EARNING = "EARNING"
+    DEDUCTION = "DEDUCTION"
+
+    COMPONENT_TYPES = [
+        (EARNING, "Earning"),
+        (DEDUCTION, "Deduction"),
+    ]
+
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+    )
+
+    code = models.CharField(
+        max_length=30,
+        unique=True,
+    )
+
+    component_type = models.CharField(
+        max_length=20,
+        choices=COMPONENT_TYPES,
+    )
+
+    taxable = models.BooleanField(
+        default=False,
+    )
+
+    active = models.BooleanField(
+        default=True,
+    )
+
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.code})"
+
+
+class EmployeePayrollComponent(models.Model):
+    """
+    Recurring payroll component assigned to an employee.
+    """
+
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name="payroll_components",
+    )
+
+    component = models.ForeignKey(
+        PayrollComponent,
+        on_delete=models.PROTECT,
+        related_name="employee_assignments",
+    )
+
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    effective_from = models.DateField()
+
+    effective_to = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = [
+            "employee",
+            "component",
+            "-effective_from",
+        ]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "employee",
+                    "active",
+                ],
+                name="emp_pay_component_idx",
+            ),
+        ]
+
+    def clean(self):
+        errors = {}
+
+        if self.amount < 0:
+            errors["amount"] = "Amount cannot be negative."
+
+        if (
+            self.effective_to
+            and self.effective_to < self.effective_from
+        ):
+            errors["effective_to"] = (
+                "End date cannot be earlier than start date."
+            )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return (
+            f"{self.employee} - "
+            f"{self.component} - "
+            f"{self.amount}"
+        )
+
+
+class PayrollAdjustment(models.Model):
+    """
+    One-time payroll earning or deduction.
+    """
+
+    employee = models.ForeignKey(
+        Employee,
+        on_delete=models.PROTECT,
+        related_name="payroll_adjustments",
+    )
+
+    month = models.PositiveSmallIntegerField()
+
+    year = models.PositiveSmallIntegerField()
+
+    description = models.CharField(
+        max_length=255,
+    )
+
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    component_type = models.CharField(
+        max_length=20,
+        choices=PayrollComponent.COMPONENT_TYPES,
+    )
+
+    approved = models.BooleanField(
+        default=False,
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=[
+                    "employee",
+                    "year",
+                    "month",
+                ],
+                name="pay_adjust_period_idx",
+            ),
+        ]
+
+    def clean(self):
+        if self.amount < 0:
+            raise ValidationError(
+                {"amount": "Adjustment cannot be negative."}
+            )
+
+        if not 1 <= self.month <= 12:
+            raise ValidationError(
+                {"month": "Invalid payroll month."}
+            )
+
+    def __str__(self):
+        return (
+            f"{self.employee} - "
+            f"{self.description} - "
+            f"{self.amount}"
+        )
+        
+        
+class PayrollRun(models.Model):
+    DRAFT = "DRAFT"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
+    APPROVED = "APPROVED"
+    FINALIZED = "FINALIZED"
+    REVERSED = "REVERSED"
+
+    STATUS_CHOICES = [
+        (DRAFT, "Draft"),
+        (PENDING_APPROVAL, "Pending approval"),
+        (APPROVED, "Approved"),
+        (FINALIZED, "Finalized"),
+        (REVERSED, "Reversed"),
+    ]
+
+    month = models.PositiveSmallIntegerField()
+    year = models.PositiveSmallIntegerField()
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=DRAFT,
+    )
+
+    policy_version = models.CharField(
+        max_length=50,
+        default="1.0",
+    )
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_payroll_runs",
+    )
+
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_payroll_runs",
+    )
+
+    finalized_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="finalized_payroll_runs",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    approved_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    finalized_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["month", "year"],
+                name="unique_payroll_period",
+            ),
+        ]
+
+        ordering = [
+            "-year",
+            "-month",
+        ]
+
+    def __str__(self):
+        return (
+            f"Payroll {self.month:02d}/{self.year}"
+            f" - {self.get_status_display()}"
+        )
+
+    @property
+    def is_locked(self):
+        return self.status in {
+            self.FINALIZED,
+            self.REVERSED,
+        }

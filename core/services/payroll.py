@@ -13,90 +13,420 @@ Overtime pay (employees whose schedule is overtime-eligible only):
 An employee with no overtime gets no overtime term at all, so their figures are exactly
 what they were before overtime existed.
 """
-import calendar
-from decimal import Decimal
 
+"""Payroll calculation and payroll business rules."""
+
+import calendar
+from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
+
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q
 
 from ..models import Attendance, Employee, Salary
 from . import schedules
 
+from django.utils import timezone
+
+from ..models import (
+    PayrollAdjustment,
+    PayrollRun,
+)
+
 CENT = Decimal("0.01")
 
 
-def _overtime_by_employee(month, year, per_day_by_emp):
-    """{employee id: (overtime minutes, overtime pay)} for employees who earned any."""
+def money(value):
+    return Decimal(value).quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+@dataclass(frozen=True)
+class PayrollCalculation:
+    employee: Employee
+    month: int
+    year: int
+    calendar_days: int
+    present_days: int
+    half_days: int
+    absent_days_count: int
+    leave_days: int
+    absent_equivalent_days: Decimal
+    basic_salary: Decimal
+    per_day_pay: Decimal
+    absence_deduction: Decimal
+    overtime_minutes: int
+    overtime_pay: Decimal
+    gross_pay: Decimal
+    net_pay: Decimal
+
+
+def validate_period(month, year):
+    if not 1 <= int(month) <= 12:
+        raise ValidationError("Month must be between 1 and 12.")
+
+    if int(year) < 2000 or int(year) > 2100:
+        raise ValidationError("Invalid payroll year.")
+
+
+def get_attendance_totals(employee, month, year):
+    result = employee.attendance.filter(
+        date__month=month,
+        date__year=year,
+    ).aggregate(
+        present=Count(
+            "id",
+            filter=Q(status="P"),
+        ),
+        half=Count(
+            "id",
+            filter=Q(status="H"),
+        ),
+        absent=Count(
+            "id",
+            filter=Q(status="A"),
+        ),
+        leave=Count(
+            "id",
+            filter=Q(status="L"),
+        ),
+    )
+
+    return {
+        "present": result["present"] or 0,
+        "half": result["half"] or 0,
+        "absent": result["absent"] or 0,
+        "leave": result["leave"] or 0,
+    }
+
+
+def calculate_overtime(employee, month, year, per_day_pay):
     resolver = schedules.ScheduleResolver()
-    records = (Attendance.objects
-               .filter(date__year=year, date__month=month, status="P", check_out__isnull=False, emp__is_active=True)
-               .select_related("emp__work_schedule", "emp__department__work_schedule"))
-    minutes, schedule_of = {}, {}
-    for rec in records:
-        schedule = resolver.for_employee(rec.emp)
-        if schedule is None or not schedule.overtime_eligible:
+
+    records = (
+        Attendance.objects
+        .filter(
+            emp=employee,
+            date__month=month,
+            date__year=year,
+            status="P",
+            check_out__isnull=False,
+        )
+        .select_related(
+            "emp__work_schedule",
+            "emp__department__work_schedule",
+        )
+    )
+
+    total_minutes = 0
+    multiplier = Decimal("1.00")
+    scheduled_minutes = 0
+
+    for record in records:
+        schedule = resolver.for_employee(employee)
+
+        if not schedule or not schedule.overtime_eligible:
             continue
-        result = schedules.evaluate(rec, schedule)
-        if result and result.overtime_minutes:
-            minutes[rec.emp_id] = minutes.get(rec.emp_id, 0) + result.overtime_minutes
-            schedule_of[rec.emp_id] = schedule
-    out = {}
-    for emp_id, total in minutes.items():
-        schedule = schedule_of[emp_id]
-        shift = schedules.scheduled_minutes(schedule)
-        if not shift or emp_id not in per_day_by_emp:
+
+        evaluation = schedules.evaluate(record, schedule)
+
+        if not evaluation:
             continue
-        pay = (Decimal(total) * per_day_by_emp[emp_id] * schedule.overtime_multiplier / Decimal(shift)).quantize(CENT)
-        out[emp_id] = (total, pay)
-    return out
+
+        if evaluation.overtime_minutes <= 0:
+            continue
+
+        total_minutes += evaluation.overtime_minutes
+        multiplier = schedule.overtime_multiplier
+        scheduled_minutes = schedules.scheduled_minutes(schedule)
+
+    if not total_minutes or not scheduled_minutes:
+        return 0, Decimal("0.00")
+
+    overtime_pay = (
+        Decimal(total_minutes)
+        * per_day_pay
+        * multiplier
+        / Decimal(scheduled_minutes)
+    )
+
+    return total_minutes, money(overtime_pay)
+
+
+def calculate_employee_payroll(employee, month, year):
+    validate_period(month, year)
+
+    calendar_days = calendar.monthrange(year, month)[1]
+
+    totals = get_attendance_totals(
+        employee,
+        month,
+        year,
+    )
+
+    basic_salary = money(employee.basic_salary)
+
+    per_day_pay = money(
+        basic_salary / Decimal(calendar_days)
+    )
+
+    absent_equivalent_days = (
+        Decimal(totals["absent"])
+        + Decimal(totals["half"]) / Decimal("2")
+    )
+
+    absence_deduction = money(
+        min(
+            absent_equivalent_days * per_day_pay,
+            basic_salary,
+        )
+    )
+
+    overtime_minutes, overtime_pay = calculate_overtime(
+        employee,
+        month,
+        year,
+        per_day_pay,
+    )
+
+    gross_pay = money(
+        basic_salary + overtime_pay
+    )
+
+    net_pay = money(
+        max(
+            Decimal("0.00"),
+            gross_pay - absence_deduction,
+        )
+    )
+
+    return PayrollCalculation(
+        employee=employee,
+        month=month,
+        year=year,
+        calendar_days=calendar_days,
+        present_days=totals["present"],
+        half_days=totals["half"],
+        absent_days_count=totals["absent"],
+        leave_days=totals["leave"],
+        absent_equivalent_days=absent_equivalent_days,
+        basic_salary=basic_salary,
+        per_day_pay=per_day_pay,
+        absence_deduction=absence_deduction,
+        overtime_minutes=overtime_minutes,
+        overtime_pay=overtime_pay,
+        gross_pay=gross_pay,
+        net_pay=net_pay,
+    )
 
 
 def calculate_payroll_rows(month, year):
-    """Per-employee attendance totals and salary figures for active employees."""
-    f = Q(attendance__date__month=month, attendance__date__year=year)
-    emps = Employee.objects.filter(is_active=True).annotate(
-        present=Count("attendance", filter=f & Q(attendance__status="P")),
-        half=Count("attendance", filter=f & Q(attendance__status="H")),
-        absent=Count("attendance", filter=f & Q(attendance__status="A")),
-        leave=Count("attendance", filter=f & Q(attendance__status="L")),
+    validate_period(month, year)
+
+    employees = (
+        Employee.objects
+        .filter(is_active=True)
+        .select_related(
+            "department",
+            "position",
+            "work_schedule",
+        )
+        .order_by("name")
     )
-    days = calendar.monthrange(year, month)[1]
-    emps = list(emps)
-    per_day_by_emp = {e.pk: (e.basic_salary / days).quantize(CENT) for e in emps}
-    overtime = _overtime_by_employee(month, year, per_day_by_emp)
-    rows = []
-    for e in emps:
-        per_day = per_day_by_emp[e.pk]
-        absent_days = Decimal(e.absent) + Decimal(e.half) / 2
-        deduction = min((absent_days * per_day).quantize(CENT), e.basic_salary)
-        net = e.basic_salary - deduction
-        ot_minutes, ot_pay = overtime.get(e.pk, (0, Decimal("0.00")))
-        if ot_pay:
-            net += ot_pay  # untouched when there is no overtime
-        rows.append({"emp": e, "present": e.present, "half": e.half, "absent": e.absent,
-                     "leave": e.leave, "absent_days": absent_days, "per_day": per_day,
-                     "deduction": deduction, "overtime_minutes": ot_minutes, "overtime_pay": ot_pay,
-                     "net": net})
-    return rows
+
+    return [
+        calculate_employee_payroll(
+            employee,
+            month,
+            year,
+        )
+        for employee in employees
+    ]
 
 
 @transaction.atomic
 def generate_payroll(month, year):
-    """Create or refresh one Salary row per active employee, all-or-nothing."""
-    rows = calculate_payroll_rows(month, year)
-    for r in rows:
+    """
+    Backward-compatible payroll generation.
+
+    This keeps the existing Salary model working while
+    the PayrollRun lifecycle is introduced.
+    """
+
+    rows = calculate_payroll_rows(
+        month,
+        year,
+    )
+
+    for row in rows:
         Salary.objects.update_or_create(
-            emp=r["emp"], month=month, year=year,
-            defaults={"absent_days": r["absent_days"], "per_day_pay": r["per_day"],
-                      # gross = basic pay + overtime, so that net = gross - deduction still holds
-                      "gross": r["emp"].basic_salary + r["overtime_pay"], "deduction": r["deduction"],
-                      "overtime_minutes": r["overtime_minutes"], "overtime_pay": r["overtime_pay"], "net": r["net"]})
+            emp=row.employee,
+            month=row.month,
+            year=row.year,
+            defaults={
+                "absent_days": row.absent_equivalent_days,
+                "per_day_pay": row.per_day_pay,
+                "gross": row.gross_pay,
+                "deduction": row.absence_deduction,
+                "overtime_minutes": row.overtime_minutes,
+                "overtime_pay": row.overtime_pay,
+                "net": row.net_pay,
+            },
+        )
+
     return len(rows)
 
 
 def attendance_totals(salary):
-    """Attendance counts for the month a salary slip covers."""
-    f = Q(date__month=salary.month, date__year=salary.year)
-    return salary.emp.attendance.aggregate(
-        present=Count("id", filter=f & Q(status="P")), half=Count("id", filter=f & Q(status="H")),
-        absent=Count("id", filter=f & Q(status="A")), leave=Count("id", filter=f & Q(status="L")))
+    result = salary.emp.attendance.filter(
+        date__month=salary.month,
+        date__year=salary.year,
+    ).aggregate(
+        present=Count(
+            "id",
+            filter=Q(status="P"),
+        ),
+        half=Count(
+            "id",
+            filter=Q(status="H"),
+        ),
+        absent=Count(
+            "id",
+            filter=Q(status="A"),
+        ),
+        leave=Count(
+            "id",
+            filter=Q(status="L"),
+        ),
+    )
+
+    return result
+
+@transaction.atomic
+def create_payroll_run(month, year, user):
+    validate_period(month, year)
+
+    run, created = PayrollRun.objects.select_for_update().get_or_create(
+        month=month,
+        year=year,
+        defaults={
+            "created_by": user,
+            "policy_version": "1.0",
+        },
+    )
+
+    if run.status in {
+        PayrollRun.FINALIZED,
+        PayrollRun.REVERSED,
+    }:
+        raise ValidationError(
+            "A finalized or reversed payroll cannot be regenerated."
+        )
+
+    return run
+
+
+@transaction.atomic
+def submit_payroll_for_approval(run):
+    run = PayrollRun.objects.select_for_update().get(
+        pk=run.pk
+    )
+
+    if run.status != PayrollRun.DRAFT:
+        raise ValidationError(
+            "Only draft payroll runs can be submitted."
+        )
+
+    rows = calculate_payroll_rows(
+        run.month,
+        run.year,
+    )
+
+    if not rows:
+        raise ValidationError(
+            "There are no active employees to process."
+        )
+
+    run.status = PayrollRun.PENDING_APPROVAL
+    run.save(
+        update_fields=["status"]
+    )
+
+    return run
+
+
+@transaction.atomic
+def approve_payroll(run, user):
+    run = PayrollRun.objects.select_for_update().get(
+        pk=run.pk
+    )
+
+    if run.status != PayrollRun.PENDING_APPROVAL:
+        raise ValidationError(
+            "Only payroll awaiting approval can be approved."
+        )
+
+    run.status = PayrollRun.APPROVED
+    run.approved_by = user
+    run.approved_at = timezone.now()
+
+    run.save(
+        update_fields=[
+            "status",
+            "approved_by",
+            "approved_at",
+        ]
+    )
+
+    return run
+
+
+@transaction.atomic
+def finalize_payroll(run, user):
+    run = PayrollRun.objects.select_for_update().get(
+        pk=run.pk
+    )
+
+    if run.status != PayrollRun.APPROVED:
+        raise ValidationError(
+            "Only approved payroll can be finalized."
+        )
+
+    generate_payroll(
+        run.month,
+        run.year,
+    )
+
+    run.status = PayrollRun.FINALIZED
+    run.finalized_by = user
+    run.finalized_at = timezone.now()
+
+    run.save(
+        update_fields=[
+            "status",
+            "finalized_by",
+            "finalized_at",
+        ]
+    )
+
+    return run
+
+
+@transaction.atomic
+def reverse_payroll(run):
+    run = PayrollRun.objects.select_for_update().get(
+        pk=run.pk
+    )
+
+    if run.status != PayrollRun.FINALIZED:
+        raise ValidationError(
+            "Only finalized payroll can be reversed."
+        )
+
+    run.status = PayrollRun.REVERSED
+
+    run.save(
+        update_fields=["status"]
+    )
+
+    return run
