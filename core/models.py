@@ -966,3 +966,84 @@ class CalendarHoliday(models.Model):
             f"{self.calendar.name}: "
             f"{self.name} ({self.date})"
         )
+        
+        
+class Notification(models.Model):
+    LEAVE_DECISION = "LEAVE_DECISION"
+    LEAVE_PENDING = "LEAVE_PENDING"
+    ATTENDANCE_EXCEPTION = "ATTENDANCE_EXCEPTION"
+
+    TYPES = [
+        (LEAVE_DECISION, "Leave decision"),
+        (LEAVE_PENDING, "Pending leave"),
+        (
+            ATTENDANCE_EXCEPTION,
+            "Attendance exception",
+        ),
+    ]
+
+    recipient = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+    )
+
+    notification_type = models.CharField(
+        max_length=40,
+        choices=TYPES,
+    )
+
+    title = models.CharField(
+        max_length=150,
+    )
+
+    message = models.TextField()
+
+    url = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    unique_key = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    read = models.BooleanField(
+        default=False,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+        indexes = [
+            models.Index(
+                fields=[
+                    "recipient",
+                    "read",
+                    "created_at",
+                ],
+                name="notification_user_idx",
+            ),
+        ]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "recipient",
+                    "unique_key",
+                ],
+                condition=~models.Q(
+                    unique_key=""
+                ),
+                name="unique_user_notification",
+            ),
+        ]
+
+    def __str__(self):
+        return self.title
+    

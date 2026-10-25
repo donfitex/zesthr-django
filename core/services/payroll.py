@@ -60,6 +60,27 @@ class PayrollCalculation:
     gross_pay: Decimal
     net_pay: Decimal
 
+    def __getitem__(self, key):
+        """Compatibility with the report's established dictionary-style row API."""
+        fields = {
+            "emp": self.employee,
+            "present": self.present_days,
+            "half": self.half_days,
+            "absent": self.absent_days_count,
+            "leave": self.leave_days,
+            "absent_days": self.absent_equivalent_days,
+            "per_day": self.per_day_pay,
+            "deduction": self.absence_deduction,
+            "overtime_minutes": self.overtime_minutes,
+            "overtime_pay": self.overtime_pay,
+            "gross": self.gross_pay,
+            "net": self.net_pay,
+        }
+        try:
+            return fields[key]
+        except KeyError:
+            raise KeyError(key) from None
+
 
 def validate_period(month, year):
     if not 1 <= int(month) <= 12:
