@@ -10,11 +10,19 @@ Codenames are "app_label.codename" strings, as used by user.has_perm().
 from django.contrib.auth.models import Group, Permission
 
 SYSTEM_ADMIN = "System Administrator"
+SUPER_ADMIN = "Super Administrator"
+ORGANIZATION_ADMIN = "Organization Administrator"
 HR_ADMIN = "HR Administrator"
+HR_MANAGER = "HR Manager"
 HR_OFFICER = "HR Officer"
 DEPARTMENT_MANAGER = "Department Manager"
 PAYROLL_OFFICER = "Payroll Officer"
+FINANCE_OFFICER = "Finance Officer"
+RECRUITER = "Recruiter"
+TEAM_LEAD = "Team Lead"
 EMPLOYEE = "Employee"
+AUDITOR = "Auditor"
+READ_ONLY_ADMIN = "Read-Only Administrator"
 
 # Permission names used by views (kept as constants to avoid typos).
 VIEW_EMPLOYEE = "core.view_employee"
@@ -48,10 +56,30 @@ REFERENCE_DATA_PERMISSIONS = [
 ]
 
 ROLE_PERMISSIONS = {
+    # Broad administration of capabilities that exist in the current product.
+    # Django's `is_superuser` remains the break-glass platform-administration flag.
+    SUPER_ADMIN: [
+        "auth.view_user", "auth.add_user", "auth.change_user", "auth.delete_user",
+        "auth.view_group", "auth.add_group", "auth.change_group", "auth.delete_group",
+        VIEW_SECURITY_LOG, VIEW_ATTENDANCE_AUDIT,
+        VIEW_EMPLOYEE, ADD_EMPLOYEE, CHANGE_EMPLOYEE, DELETE_EMPLOYEE,
+        VIEW_EMPLOYEE_PAY, CHANGE_EMPLOYEE_PAY, LINK_EMPLOYEE_ACCOUNT, DEACTIVATE_EMPLOYEE,
+        VIEW_EMPLOYEE_PERSONAL, *REFERENCE_DATA_PERMISSIONS,
+        ADD_ATTENDANCE, CHANGE_ATTENDANCE, DELETE_ATTENDANCE, REVIEW_CORRECTIONS,
+        VIEW_ALL_ATTENDANCE, MARK_ATTENDANCE, VIEW_ALL_LEAVES, APPROVE_LEAVE,
+        GENERATE_PAYROLL, VIEW_ALL_PAYSLIPS, VIEW_PAYROLL_REPORT,
+    ],
     # Manages accounts and groups. Deliberately has NO access to salary data.
     SYSTEM_ADMIN: [
         "auth.view_user", "auth.add_user", "auth.change_user", "auth.delete_user",
         "auth.view_group", VIEW_SECURITY_LOG,
+    ],
+    # Manages the organization and workforce records, but not salary data.
+    ORGANIZATION_ADMIN: [
+        VIEW_EMPLOYEE, ADD_EMPLOYEE, CHANGE_EMPLOYEE, DELETE_EMPLOYEE,
+        LINK_EMPLOYEE_ACCOUNT, DEACTIVATE_EMPLOYEE, VIEW_EMPLOYEE_PERSONAL,
+        *REFERENCE_DATA_PERMISSIONS,
+        VIEW_ALL_ATTENDANCE, MARK_ATTENDANCE, VIEW_ALL_LEAVES, APPROVE_LEAVE,
     ],
     # Full HR access, including payroll.
     HR_ADMIN: [
@@ -69,17 +97,36 @@ ROLE_PERMISSIONS = {
         ADD_ATTENDANCE, CHANGE_ATTENDANCE, VIEW_ALL_ATTENDANCE, MARK_ATTENDANCE, REVIEW_CORRECTIONS,
         VIEW_ALL_LEAVES, APPROVE_LEAVE,
     ],
+    # Leads HR operations without payroll-generation or salary-edit authority.
+    HR_MANAGER: [
+        VIEW_EMPLOYEE, ADD_EMPLOYEE, CHANGE_EMPLOYEE, DELETE_EMPLOYEE,
+        LINK_EMPLOYEE_ACCOUNT, DEACTIVATE_EMPLOYEE, VIEW_EMPLOYEE_PERSONAL,
+        *REFERENCE_DATA_PERMISSIONS,
+        ADD_ATTENDANCE, CHANGE_ATTENDANCE, DELETE_ATTENDANCE, VIEW_ATTENDANCE_AUDIT, REVIEW_CORRECTIONS,
+        VIEW_ALL_ATTENDANCE, MARK_ATTENDANCE, VIEW_ALL_LEAVES, APPROVE_LEAVE,
+    ],
     # Payroll only: reads pay data and attendance, runs payroll. Cannot edit people.
     PAYROLL_OFFICER: [
         VIEW_EMPLOYEE, VIEW_EMPLOYEE_PAY, VIEW_ALL_ATTENDANCE,
         GENERATE_PAYROLL, VIEW_ALL_PAYSLIPS, VIEW_PAYROLL_REPORT,
     ],
+    # Finance may reconcile current payroll but may not generate it or alter employee pay.
+    FINANCE_OFFICER: [
+        VIEW_EMPLOYEE, VIEW_EMPLOYEE_PAY, VIEW_ALL_ATTENDANCE,
+        VIEW_ALL_PAYSLIPS, VIEW_PAYROLL_REPORT,
+    ],
+    # Recruitment and team features do not yet have permissions. These groups are
+    # created now so assignment is stable as those domains are introduced.
+    RECRUITER: [],
+    TEAM_LEAD: [],
     # Self-service only for now. Team-scoped powers need the manager/department
     # relationships added in Commit 2.2, so no org-wide permission is granted.
     DEPARTMENT_MANAGER: [],
     # Self-service (own attendance, leave, payslips) needs no extra permission:
     # it is tied to the user's own employee profile.
     EMPLOYEE: [],
+    AUDITOR: [VIEW_SECURITY_LOG, VIEW_ATTENDANCE_AUDIT],
+    READ_ONLY_ADMIN: [VIEW_EMPLOYEE, VIEW_ALL_ATTENDANCE, VIEW_ALL_LEAVES, VIEW_PAYROLL_REPORT],
 }
 
 

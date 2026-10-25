@@ -62,6 +62,15 @@ class RoleDefinitionTests(BaseTest):
         for perm in (roles.VIEW_EMPLOYEE_PAY, roles.VIEW_PAYROLL_REPORT, roles.VIEW_ALL_PAYSLIPS):
             self.assertFalse(self.sysadmin.has_perm(perm))
 
+    def test_finance_and_auditor_roles_are_limited_to_their_current_scope(self):
+        finance = make_user("finance", roles.FINANCE_OFFICER)
+        auditor = make_user("auditor", roles.AUDITOR)
+
+        self.assertTrue(finance.has_perm(roles.VIEW_PAYROLL_REPORT))
+        self.assertFalse(finance.has_perm(roles.GENERATE_PAYROLL))
+        self.assertTrue(auditor.has_perm(roles.VIEW_SECURITY_LOG))
+        self.assertFalse(auditor.has_perm(roles.VIEW_EMPLOYEE_PAY))
+
     def test_manager_has_no_organisation_wide_permission(self):
         self.assertEqual(ROLE_PERMISSIONS[roles.DEPARTMENT_MANAGER], [])
         self.assertFalse(self.manager.has_perm(roles.VIEW_EMPLOYEE))

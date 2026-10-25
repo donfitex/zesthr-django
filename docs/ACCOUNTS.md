@@ -33,6 +33,14 @@ Address note: behind a reverse proxy every request appears to come from the prox
 `DJANGO_TRUST_X_FORWARDED_FOR=True`. Enable it **only** if your proxy overwrites that header, otherwise
 clients can forge their address in the log and sidestep the sign-in block.
 
+## Roles
+
+HROS provisions the roadmap roles as Django groups. Each group receives only
+the permissions supported by the currently shipped modules; empty Recruiter and
+Team Lead groups are intentional placeholders until recruitment and team
+workflows exist. `is_superuser` remains the break-glass platform-administration
+capability and should be tightly controlled.
+
 ## Email (password reset)
 
 Development prints emails to the terminal. Production requires `DJANGO_EMAIL_HOST` and
