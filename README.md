@@ -1,6 +1,8 @@
 # HROS: Human Resources Operating System (Django)
 
-Track daily attendance and generate monthly salary slips with automated loss-of-pay deductions.
+HROS is evolving from an attendance application into a secure, employee-centric
+Human Resources Management Platform. Today it provides daily attendance and
+monthly salary slips with automated loss-of-pay deductions.
 Stack: Python, Django, PostgreSQL in production (Supabase), SQLite for local development, HTML, CSS.
 
 ## Run it
@@ -32,6 +34,13 @@ The optional `seed_demo` command creates test accounts with known passwords. It 
 - **Payroll & Deductions**: Loss-of-pay calculations, salary register generation, and printable individual salary slips.
 - Light/dark theme toggle, responsive mobile navigation, and print-ready stylesheet.
 
+## Product architecture
+
+The platform roadmap, domain boundaries, security principles and incremental
+migration strategy are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+The initial architectural decision is recorded in
+[ADR 0001](docs/adr/0001-modular-monolith-and-domain-ownership.md).
+
 ## Salary formula
 `per_day_pay = basic / days in month`  
 `absent_days = absent + half-days / 2` (approved leave `L` is fully exempt from deduction)  
@@ -47,4 +56,3 @@ The repository root must contain `manage.py`, `requirements.txt`, `vercel.json`,
 - `core/views.py`: Role-scoped dashboards, attendance check-in/out, holiday calendar, and leave approvals
 - `core/templates/`: `employee_dashboard.html`, `dashboard.html`, `holidays.html`, `leaves_list.html`, `leave_apply.html`, `home.html`, etc.
 - `core/static/css/style.css`: HROS design system, color tokens, and responsive layout
-
