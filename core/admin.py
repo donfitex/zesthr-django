@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 
 from . import roles
 from .services import accounts
-from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Employee, EmploymentType, JobPosition, Salary, WorkLocation,
+from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Employee, EmploymentType, Holiday, JobPosition, Salary, WorkLocation,
                      WorkSchedule)
 
 
@@ -50,6 +50,14 @@ class EmployeeAdmin(admin.ModelAdmin):
 
 for model in (Department, JobPosition, EmploymentType, WorkLocation, WorkSchedule):
     admin.site.register(model)
+
+
+@admin.register(Holiday)
+class HolidayAdmin(admin.ModelAdmin):
+    list_display = ("name", "date", "holiday_type")
+    list_filter = ("holiday_type",)
+    search_fields = ("name", "description")
+    date_hierarchy = "date"
 
 
 @admin.register(Attendance)

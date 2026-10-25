@@ -1,6 +1,10 @@
 import calendar
 from datetime import date, timedelta
+import csv
 
+from django.http import HttpResponse
+
+from .services import reports as reports_service
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -69,26 +73,54 @@ def home(request):
 @login_required
 def dashboard(request):
     today = timezone.localdate()
-    emp_profile = get_employee_profile(request.user)
-    can_see_company = request.user.has_perm(roles.VIEW_ALL_ATTENDANCE)
 
-    # Employee portal
-    if not can_see_company and emp_profile:
-        return _employee_portal(request, emp_profile, today)
+    employee = get_employee_profile(
+        request.user
+    )
 
-    # Administrator / HR / payroll portal
-    if not can_see_company:
+    if (
+        employee
+        and not request.user.has_perm(
+            roles.VIEW_ALL_ATTENDANCE
+        )
+    ):
+        return _employee_portal(
+            request,
+            employee,
+            today,
+        )
+
+    if not request.user.has_perm(
+        roles.VIEW_ALL_ATTENDANCE
+    ):
         raise PermissionDenied
-    ctx = selectors.company_snapshot(today)
-    ctx["today"] = today
-    # None means "not permitted": the template hides the tile.
-    ctx["pending_leaves"] = (selectors.pending_leave_count()
-                             if request.user.has_perm(roles.VIEW_ALL_LEAVES) else None)
-    ctx["pending_corrections"] = (AttendanceCorrectionRequest.objects.filter(status="PENDING").count()
-                                  if request.user.has_perm(roles.REVIEW_CORRECTIONS) else None)
-    ctx["payroll"] = (selectors.net_payroll_total(today.month, today.year)
-                      if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None)
-    return render(request, "dashboard.html", ctx)
+
+    snapshot = selectors.dashboard_snapshot(
+        today
+    )
+
+    departments = selectors.department_attendance_summary(
+        today
+    )
+
+    context = {
+        "today": today,
+        "snapshot": snapshot,
+        "departments": departments,
+        "pending_leaves": (
+            snapshot["pending_leaves"]
+            if request.user.has_perm(
+                roles.VIEW_ALL_LEAVES
+            )
+            else None
+        ),
+    }
+
+    return render(
+        request,
+        "dashboard.html",
+        context,
+    )
 
 
 # ---------- Employees ----------
@@ -811,3 +843,74 @@ def leave_action(request, pk):
             messages.info(request, f"Leave application for {leave.emp.name} rejected.")
 
     return redirect("leaves_list")
+
+
+@login_required
+@require_safe
+def attendance_report_csv(request):
+    if not request.user.has_perm(
+        roles.VIEW_ALL_ATTENDANCE
+    ):
+        raise PermissionDenied
+
+    start = _parse_date(
+        request.GET.get("from")
+    )
+
+    end = _parse_date(
+        request.GET.get("to")
+    )
+
+    if not start or not end:
+        raise ValidationError(
+            "Both from and to dates are required."
+        )
+
+    if end < start:
+        raise ValidationError(
+            "End date cannot be before start date."
+        )
+
+    rows = reports_service.attendance_report(
+        start,
+        end,
+    )
+
+    response = HttpResponse(
+        content_type="text/csv"
+    )
+
+    response["Content-Disposition"] = (
+        'attachment; filename="attendance-report.csv"'
+    )
+
+    writer = csv.writer(response)
+
+    writer.writerow(
+        [
+            "Date",
+            "Employee ID",
+            "Employee",
+            "Department",
+            "Status",
+            "Check In",
+            "Check Out",
+        ]
+    )
+
+    for row in rows:
+        writer.writerow(
+            [
+                row.date,
+                row.emp.employee_number,
+                row.emp.name,
+                row.emp.department.name
+                if row.emp.department
+                else "",
+                row.get_status_display(),
+                row.check_in or "",
+                row.check_out or "",
+            ]
+        )
+
+    return response

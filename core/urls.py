@@ -51,4 +51,9 @@ urlpatterns = [
     path("leaves/", v.leaves_list, name="leaves_list"),
     path("leaves/apply/", v.leave_apply, name="leave_apply"),
     path("leaves/<int:pk>/action/", v.leave_action, name="leave_action"),
+    path(
+    "reports/attendance.csv",
+    v.attendance_report_csv,
+    name="attendance_report_csv",
+),
 ]

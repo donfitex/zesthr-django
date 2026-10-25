@@ -1,10 +1,9 @@
-"""Read-only queries that feed dashboards and lists (no side effects)."""
 import calendar
 from datetime import date, timedelta
 
-from django.db.models import Sum
+from django.db.models import Count, Sum, Q
 
-from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
+from .models import Attendance, Department, Employee, Holiday, LeaveApplication, Salary
 from .models import AttendanceCorrectionRequest
 from .services import corrections as corrections_service
 from .services import schedules
@@ -173,3 +172,73 @@ def attendance_register(today):
     """(employee, today's record or None) for every active employee."""
     records = {a.emp_id: a for a in Attendance.objects.filter(date=today)}
     return [(e, records.get(e.id)) for e in Employee.objects.filter(is_active=True)]
+
+
+
+def dashboard_snapshot(day):
+    employee_qs = Employee.objects.filter(
+        is_active=True
+    )
+
+    attendance_qs = Attendance.objects.filter(
+        date=day,
+        emp__is_active=True,
+    )
+
+    return {
+        "total_employees": employee_qs.count(),
+
+        "present": attendance_qs.filter(
+            status="P"
+        ).count(),
+
+        "absent": attendance_qs.filter(
+            status="A"
+        ).count(),
+
+        "half_day": attendance_qs.filter(
+            status="H"
+        ).count(),
+
+        "leave": attendance_qs.filter(
+            status="L"
+        ).count(),
+
+        "unmarked": employee_qs.exclude(
+            attendance__date=day
+        ).count(),
+
+        "pending_leaves": LeaveApplication.objects.filter(
+            status="PENDING"
+        ).count(),
+    }
+
+
+def department_attendance_summary(day):
+    return (
+        Department.objects
+        .filter(is_active=True)
+        .annotate(
+            employee_count=Count(
+                "employees",
+                filter=Q(
+                    employees__is_active=True
+                ),
+            ),
+            present_count=Count(
+                "employees__attendance",
+                filter=Q(
+                    employees__attendance__date=day,
+                    employees__attendance__status="P",
+                ),
+            ),
+            absent_count=Count(
+                "employees__attendance",
+                filter=Q(
+                    employees__attendance__date=day,
+                    employees__attendance__status="A",
+                ),
+            ),
+        )
+        .order_by("name")
+    )

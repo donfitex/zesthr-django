@@ -897,3 +897,72 @@ class PayrollRun(models.Model):
             self.FINALIZED,
             self.REVERSED,
         }
+        
+        
+class HolidayCalendar(models.Model):
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+    )
+
+    code = models.CharField(
+        max_length=30,
+        unique=True,
+    )
+
+    country = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    active = models.BooleanField(
+        default=True,
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+
+class CalendarHoliday(models.Model):
+    calendar = models.ForeignKey(
+        HolidayCalendar,
+        on_delete=models.CASCADE,
+        related_name="holidays",
+    )
+
+    name = models.CharField(
+        max_length=150,
+    )
+
+    date = models.DateField()
+
+    is_working_day = models.BooleanField(
+        default=False,
+    )
+
+    description = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["date"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "calendar",
+                    "date",
+                ],
+                name="unique_calendar_holiday",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.calendar.name}: "
+            f"{self.name} ({self.date})"
+        )
