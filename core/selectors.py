@@ -1,9 +1,11 @@
 import calendar
 from datetime import date, timedelta
 
-from django.db.models import Count, Sum, Q
+from django.db.models import Sum
 
-from .models import Attendance, Department, Employee, Holiday, LeaveApplication, Salary
+from apps.organizations import selectors as organization_selectors
+
+from .models import Attendance, Employee, Holiday, LeaveApplication, Salary
 from .models import AttendanceCorrectionRequest
 from .services import corrections as corrections_service
 from .services import schedules
@@ -215,30 +217,5 @@ def dashboard_snapshot(day):
 
 
 def department_attendance_summary(day):
-    return (
-        Department.objects
-        .filter(is_active=True)
-        .annotate(
-            employee_count=Count(
-                "employees",
-                filter=Q(
-                    employees__is_active=True
-                ),
-            ),
-            present_count=Count(
-                "employees__attendance",
-                filter=Q(
-                    employees__attendance__date=day,
-                    employees__attendance__status="P",
-                ),
-            ),
-            absent_count=Count(
-                "employees__attendance",
-                filter=Q(
-                    employees__attendance__date=day,
-                    employees__attendance__status="A",
-                ),
-            ),
-        )
-        .order_by("name")
-    )
+    """Legacy facade; new code uses apps.organizations.selectors directly."""
+    return organization_selectors.department_attendance_summary(day)
