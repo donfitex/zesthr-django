@@ -192,11 +192,13 @@ class Employee(models.Model):
 
     user = models.OneToOneField(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="employee_profile")
     name = models.CharField(max_length=100)
+    preferred_name = models.CharField(max_length=100, blank=True)
     designation = models.CharField(max_length=100)
     basic_salary = models.DecimalField(max_digits=10, decimal_places=2)
     email = models.EmailField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     joined_on = models.DateField(default=date.today)
+    date_of_birth = models.DateField(null=True, blank=True)
     # Derived from employment_status on every save (never edit it directly).
     is_active = models.BooleanField(default=True, editable=False)
 
@@ -204,6 +206,16 @@ class Employee(models.Model):
                                        help_text="Leave blank to generate automatically (EMP-00001)")
     organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True, blank=True,
                                      related_name="employees")
+    company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, null=True, blank=True,
+                                related_name="employees")
+    branch = models.ForeignKey("organizations.Branch", on_delete=models.PROTECT, null=True, blank=True,
+                               related_name="employees")
+    team = models.ForeignKey("organizations.Team", on_delete=models.PROTECT, null=True, blank=True,
+                             related_name="employees")
+    job_grade = models.ForeignKey("organizations.JobGrade", on_delete=models.PROTECT, null=True, blank=True,
+                                  related_name="employees")
+    cost_center = models.ForeignKey("organizations.CostCenter", on_delete=models.PROTECT, null=True, blank=True,
+                                    related_name="employees")
     department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
     position = models.ForeignKey(JobPosition, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")
     employment_type = models.ForeignKey(EmploymentType, on_delete=models.PROTECT, null=True, blank=True, related_name="employees")

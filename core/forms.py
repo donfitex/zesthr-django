@@ -14,11 +14,12 @@ T = forms.TimeInput(attrs={"type": "time"}, format="%H:%M")
 class EmployeeForm(forms.ModelForm):
     class Meta:
         model = Employee
-        fields = ["user", "employee_number", "name", "designation", "basic_salary", "email", "phone", "joined_on",
-                  "department", "position", "employment_type", "work_location", "work_schedule", "manager",
+        fields = ["user", "employee_number", "name", "preferred_name", "date_of_birth", "designation", "basic_salary", "email", "phone", "joined_on",
+                  "company", "branch", "department", "team", "position", "job_grade", "cost_center",
+                  "employment_type", "work_location", "work_schedule", "manager",
                   "employment_status", "confirmation_date",
                   "address", "emergency_contact_name", "emergency_contact_phone"]
-        widgets = {"joined_on": D, "confirmation_date": D, "address": forms.Textarea(attrs={"rows": 2})}
+        widgets = {"joined_on": D, "date_of_birth": D, "confirmation_date": D, "address": forms.Textarea(attrs={"rows": 2})}
         labels = {"user": "Login account", "employment_status": "Status", "employee_number": "Employee ID"}
 
     def __init__(self, *args, can_edit_pay=False, can_link_account=False, can_edit_personal=True, **kwargs):
@@ -27,7 +28,7 @@ class EmployeeForm(forms.ModelForm):
         if not can_edit_pay:
             del self.fields["basic_salary"]
         if not can_edit_personal:
-            for name in ("address", "emergency_contact_name", "emergency_contact_phone"):
+            for name in ("preferred_name", "date_of_birth", "address", "emergency_contact_name", "emergency_contact_phone"):
                 del self.fields[name]
         if not can_link_account:
             del self.fields["user"]
@@ -52,7 +53,7 @@ class EmployeeForm(forms.ModelForm):
         if self.instance.pk:
             managers = managers.exclude(pk=self.instance.pk)
         self.fields["manager"].queryset = managers
-        for name in ("department", "position", "employment_type", "work_location", "work_schedule"):
+        for name in ("company", "branch", "department", "team", "position", "job_grade", "cost_center", "employment_type", "work_location", "work_schedule"):
             self.fields[name].queryset = self.fields[name].queryset.filter(
                 **({"is_active": True} if hasattr(self.fields[name].queryset.model, "is_active") else {}))
 
@@ -127,4 +128,3 @@ class LeaveApplicationForm(forms.ModelForm):
         validate_leave_request(self.employee, cleaned.get("leave_type"),
                                cleaned.get("start_date"), cleaned.get("end_date"))
         return cleaned
-
