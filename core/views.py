@@ -63,12 +63,12 @@ def home(request):
     today = timezone.localdate()
     ctx = {"today": today, "month_name": calendar.month_name[today.month], "year": today.year}
     if request.user.has_perm(roles.VIEW_ALL_ATTENDANCE):
-        snap = selectors.company_snapshot(today, recent_limit=5)
+        snap = selectors.company_snapshot(today, recent_limit=5, user=request.user)
         ctx.update(total_employees=snap["total"], present_count=snap["present"],
                    absent_count=snap["absent"], leave_count=snap["leave"],
                    unmarked_count=snap["unmarked"], recent_checkins=snap["recent"])
     if request.user.has_perm(roles.VIEW_PAYROLL_REPORT):
-        ctx["payroll_total"] = selectors.net_payroll_total(today.month, today.year)
+        ctx["payroll_total"] = selectors.net_payroll_total(today.month, today.year, user=request.user)
     return render(request, "home.html", ctx)
 
 
@@ -98,16 +98,16 @@ def dashboard(request):
         raise PermissionDenied
 
     snapshot = selectors.dashboard_snapshot(
-        today
+        today, user=request.user
     )
 
     departments = selectors.department_attendance_summary(
-        today
+        today, user=request.user
     )
 
     context = {
-        **selectors.company_snapshot(today),
-        "payroll": selectors.net_payroll_total(today.month, today.year) if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None,
+        **selectors.company_snapshot(today, user=request.user),
+        "payroll": selectors.net_payroll_total(today.month, today.year, user=request.user) if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None,
         "today": today,
         "snapshot": snapshot,
         "departments": departments,
@@ -131,6 +131,17 @@ def dashboard(request):
 class Base(LoginRequiredMixin, SuccessMessageMixin):
     template_name = "form.html"
     title = ""
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        field = "organization" if self.model is Employee else "emp__organization"
+        return scope_queryset(queryset, self.request.user, field)
+
+    def get_form(self, form_class=None):
+        form = super().get_form(form_class)
+        if "emp" in form.fields:
+            form.fields["emp"].queryset = scope_queryset(Employee.objects.all(), self.request.user)
+        return form
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
@@ -254,6 +265,7 @@ class EmployeeFormMixin:
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
         kwargs["can_edit_pay"] = self.request.user.has_perm(roles.CHANGE_EMPLOYEE_PAY)
         kwargs["can_link_account"] = self.request.user.has_perm(roles.LINK_EMPLOYEE_ACCOUNT)
         kwargs["can_edit_personal"] = self.request.user.has_perm(roles.VIEW_EMPLOYEE_PERSONAL)
@@ -321,7 +333,7 @@ def my_portal(request):
 
 @permission_required(roles.DEACTIVATE_EMPLOYEE)
 def employee_deactivate(request, pk):
-    emp = get_object_or_404(Employee, pk=pk)
+    emp = get_object_or_404(scope_queryset(Employee.objects.all(), request.user), pk=pk)
     if not emp.is_active:
         messages.info(request, f"{emp.name} is already inactive.")
         return redirect("employee_list")
@@ -339,7 +351,7 @@ def employee_deactivate(request, pk):
 
 @permission_required(roles.DEACTIVATE_EMPLOYEE)
 def employee_reactivate(request, pk):
-    emp = get_object_or_404(Employee, pk=pk)
+    emp = get_object_or_404(scope_queryset(Employee.objects.all(), request.user), pk=pk)
     if request.method == "POST":
         employee_service.reactivate_employee(emp, by=request.user)
         messages.success(request, f"{emp.name} reactivated.")
@@ -360,7 +372,7 @@ def attendance_today(request):
             raise Http404("Unknown employee.")
 
         if can_mark_others and emp_id is not None:
-            emp = get_object_or_404(Employee, pk=emp_id)
+            emp = get_object_or_404(scope_queryset(Employee.objects.all(), request.user), pk=emp_id)
         else:
             # Self-service: the employee always comes from the logged-in account.
             emp = require_employee_profile(request.user)
@@ -401,7 +413,7 @@ def attendance_today(request):
         raise PermissionDenied
 
     return render(request, "attendance_today.html",
-                  {"rows": selectors.attendance_register(today), "today": today})
+                  {"rows": selectors.attendance_register(today, user=request.user), "today": today})
 
 
 class AttendanceList(LoginRequiredMixin, ListView):
@@ -431,7 +443,7 @@ class AttendanceList(LoginRequiredMixin, ListView):
 
     def get_queryset(self):
         p, g = period(self.request), self.request.GET
-        qs = Attendance.objects.select_related("emp", "emp__work_schedule", "emp__department__work_schedule")
+        qs = scope_queryset(Attendance.objects.select_related("emp", "emp__work_schedule", "emp__department__work_schedule"), self.request.user, "emp__organization")
         rng = self.date_range()
         qs = qs.filter(date__range=rng) if rng else qs.filter(date__month=p["month"], date__year=p["year"])
         if g.get("status") in ("P", "A", "H", "L"):
@@ -453,8 +465,8 @@ class AttendanceList(LoginRequiredMixin, ListView):
         ctx.update(is_staff=can_see_all, emp=g.get("emp", ""), department=g.get("department", ""),
                    status=g.get("status", ""), date_from=rng[0].isoformat() if rng else "",
                    date_to=rng[1].isoformat() if rng else "", statuses=Attendance.STATUS,
-                   departments=Department.objects.all() if can_see_all else Department.objects.none(),
-                   employees=Employee.objects.all() if can_see_all else Employee.objects.none(),
+                   departments=scope_queryset(Department.objects.all(), self.request.user) if can_see_all else Department.objects.none(),
+                   employees=scope_queryset(Employee.objects.all(), self.request.user) if can_see_all else Employee.objects.none(),
                    total_matches=ctx["paginator"].count)
         resolver = schedules_service.ScheduleResolver()
         for rec in ctx["records"]:  # what each day's punches mean under the employee's schedule
@@ -552,7 +564,8 @@ def attendance_register(request):
     if g.get("q", "").strip():
         q = g["q"].strip()
         people = people.filter(Q(name__icontains=q) | Q(employee_number__icontains=q))
-    records = {r.emp_id: r for r in Attendance.objects.filter(date=day)}
+    people = scope_queryset(people, request.user)
+    records = {r.emp_id: r for r in Attendance.objects.filter(date=day, emp__in=people)}
     holiday = Holiday.objects.filter(date=day).first()
     resolver = schedules_service.ScheduleResolver()
     rows, counts = [], {"P": 0, "H": 0, "A": 0, "L": 0, "unmarked": 0, "off": 0}
@@ -568,7 +581,7 @@ def attendance_register(request):
         rows = [r for r in rows if r["state"] == wanted]
     return render(request, "attendance_register.html", {
         "day": day, "rows": rows, "counts": counts, "holiday": holiday, "q": g.get("q", ""),
-        "department": g.get("department", ""), "status": wanted, "departments": Department.objects.all(),
+        "department": g.get("department", ""), "status": wanted, "departments": scope_queryset(Department.objects.all(), request.user),
         "prev_day": day - timedelta(days=1), "next_day": day + timedelta(days=1),
         "can_bulk": request.user.has_perms([roles.ADD_ATTENDANCE, roles.MARK_ATTENDANCE]),
         "can_overwrite": request.user.has_perm(roles.CHANGE_ATTENDANCE),
@@ -595,7 +608,7 @@ def attendance_bulk(request):
         raise PermissionDenied
     try:
         results = attendance_service.bulk_mark(
-            Employee.objects.filter(pk__in=ids).select_related("work_location"), data["date"], status=data["status"],
+            scope_queryset(Employee.objects.filter(pk__in=ids).select_related("work_location"), request.user), data["date"], status=data["status"],
             check_in=data["check_in"], check_out=data["check_out"], ends_next_day=data["ends_next_day"],
             by=request.user, reason=data["reason"], overwrite=data["overwrite"])
     except attendance_service.AttendanceError as exc:
@@ -685,7 +698,7 @@ def correction_decide(request, pk):
 def attendance_history(request):
     """Who changed which attendance record, when, from what to what, and why. Read-only."""
     g = request.GET
-    qs = AttendanceAudit.objects.select_related("emp", "emp__user", "changed_by", "correction_request")
+    qs = scope_queryset(AttendanceAudit.objects.select_related("emp", "emp__user", "changed_by", "correction_request"), request.user, "emp__organization")
     if g.get("emp", "").isdigit():
         qs = qs.filter(emp_id=int(g["emp"]))
     d_from, d_to = _parse_date(g.get("from")), _parse_date(g.get("to"))
@@ -714,7 +727,7 @@ def attendance_history(request):
         entry.changes = audit_service.describe(entry)
         entry.by_self = entry.changed_by_id is not None and entry.changed_by_id == entry.emp.user_id
     return render(request, "attendance_history.html", {
-        "page": page, "total": page.paginator.count, "employees": Employee.objects.all(),
+        "page": page, "total": page.paginator.count, "employees": scope_queryset(Employee.objects.all(), request.user),
         "actions": AttendanceAudit.ACTIONS, "emp": g.get("emp", ""), "d_from": g.get("from", "") if d_from else "",
         "d_to": g.get("to", "") if d_to else "", "c_from": g.get("changed_from", "") if c_from else "",
         "c_to": g.get("changed_to", "") if c_to else "", "action": action, "by": by, "q": q})
@@ -732,14 +745,14 @@ def _exceptions(request, preset):
     try:
         rows = exceptions_service.find_exceptions(
             d_from, d_to, kinds=chosen, department_id=int(g["department"]) if g.get("department", "").isdigit() else None,
-            emp_id=int(g["emp"]) if g.get("emp", "").isdigit() else None)
+            emp_id=int(g["emp"]) if g.get("emp", "").isdigit() else None, user=request.user)
     except ValueError as exc:
         error = str(exc)
     page = Paginator(rows, 50).get_page(g.get("page"))
     return render(request, "attendance_exceptions.html", {
         "page": page, "total": len(rows), "error": error, "kinds": exceptions_service.KINDS, "chosen": chosen,
         "d_from": min(d_from, d_to), "d_to": max(d_from, d_to), "department": g.get("department", ""),
-        "emp": g.get("emp", ""), "departments": Department.objects.all(), "employees": Employee.objects.all(),
+        "emp": g.get("emp", ""), "departments": scope_queryset(Department.objects.all(), request.user), "employees": scope_queryset(Employee.objects.all(), request.user),
         "preset": preset})
 
 
@@ -757,7 +770,7 @@ def attendance_missing_punches(request):
 @permission_required(roles.VIEW_PAYROLL_REPORT)
 def monthly_report(request):
     p = period(request)
-    rows = payroll_service.calculate_payroll_rows(p["month"], p["year"])
+    rows = payroll_service.calculate_payroll_rows(p["month"], p["year"], user=request.user)
     p.update(rows=rows, total_net=sum(r["net"] for r in rows), total_ded=sum(r["deduction"] for r in rows),
              month_name=calendar.month_name[p["month"]])
     return render(request, "report.html", p)
@@ -768,10 +781,10 @@ def payroll(request):
     p = period(request)
     if request.method == "POST":
         require_perm(request.user, roles.GENERATE_PAYROLL)
-        payroll_service.generate_payroll(p["month"], p["year"])
+        payroll_service.generate_payroll(p["month"], p["year"], user=request.user)
         messages.success(request, "Payroll generated.")
         return redirect(f"{request.path}?month={p['month']}&year={p['year']}")
-    slips = Salary.objects.select_related("emp").filter(month=p["month"], year=p["year"])
+    slips = scope_queryset(Salary.objects.select_related("emp"), request.user, "emp__organization").filter(month=p["month"], year=p["year"])
     p.update(slips=slips, total=slips.aggregate(t=Sum("net"))["t"] or 0,
              month_name=calendar.month_name[p["month"]],
              any_overtime=slips.filter(overtime_pay__gt=0).exists())
@@ -781,7 +794,7 @@ def payroll(request):
 @login_required
 def slip(request, pk):
     emp_profile = get_employee_profile(request.user)
-    slips = Salary.objects.select_related("emp")
+    slips = scope_queryset(Salary.objects.select_related("emp"), request.user, "emp__organization")
     if not request.user.has_perm(roles.VIEW_ALL_PAYSLIPS):
         if not emp_profile:
             raise PermissionDenied
@@ -831,10 +844,10 @@ def leaves_list(request):
         })
 
     status_filter = request.GET.get("status")
-    qs = LeaveApplication.objects.select_related("emp").all().order_by("-applied_on")
+    qs = scope_queryset(LeaveApplication.objects.select_related("emp"), request.user, "emp__organization").order_by("-applied_on")
     if status_filter in ("PENDING", "APPROVED", "REJECTED"):
         qs = qs.filter(status=status_filter)
-    pending_count = LeaveApplication.objects.filter(status="PENDING").count()
+    pending_count = scope_queryset(LeaveApplication.objects.filter(status="PENDING"), request.user, "emp__organization").count()
     return render(request, "leaves_list.html", {
         "leaves": qs,
         "is_staff": True,
@@ -874,7 +887,7 @@ def leave_apply(request):
 @permission_required(roles.APPROVE_LEAVE)
 def leave_action(request, pk):
 
-    leave = get_object_or_404(LeaveApplication.objects.select_related("emp"), pk=pk)
+    leave = get_object_or_404(scope_queryset(LeaveApplication.objects.select_related("emp"), request.user, "emp__organization"), pk=pk)
     if request.method == "POST":
         action = request.POST.get("action")
         note = request.POST.get("admin_note", "").strip()
@@ -916,7 +929,7 @@ def attendance_report_csv(request):
 
     rows = reports_service.attendance_report(
         start,
-        end,
+        end, user=request.user,
     )
 
     response = HttpResponse(

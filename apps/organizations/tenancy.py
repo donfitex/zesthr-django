@@ -28,3 +28,25 @@ def scope_queryset(queryset, user, organization_field="organization"):
     if getattr(user, "is_superuser", False):
         return queryset
     return queryset.filter(**{f"{organization_field}__in": organization_ids_for(user)})
+
+
+def scope_model_queryset(queryset, user):
+    """Explicit ownership paths for models presented in forms and administration."""
+    paths = {
+        "organization": "pk", "organizationmembership": "organization",
+        "company": "organization", "branch": "company__organization",
+        "division": "company__organization", "team": "division__company__organization",
+        "jobgrade": "company__organization", "costcenter": "company__organization",
+        "employee": "organization", "department": "organization",
+        "jobposition": "department__organization",
+        "attendance": "emp__organization", "attendanceaudit": "emp__organization",
+        "salary": "emp__organization", "leaveapplication": "emp__organization",
+    }
+    path = paths.get(queryset.model._meta.model_name)
+    if path is None:
+        return queryset  # shared schedule and employment-type reference data
+    if queryset.model._meta.model_name == "jobposition":
+        from django.db.models import Q
+        return queryset.filter(Q(department__isnull=True) | Q(
+            department__organization__in=organization_ids_for(user)))
+    return scope_queryset(queryset, user, path)

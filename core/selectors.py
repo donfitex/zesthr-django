@@ -1,6 +1,7 @@
 import calendar
 from datetime import date, timedelta
 
+from apps.organizations.tenancy import scope_queryset
 from django.db.models import Sum
 
 from apps.organizations import selectors as organization_selectors
@@ -12,10 +13,10 @@ from .services import schedules
 from .services.attendance import current_record
 
 
-def company_snapshot(today, recent_limit=8):
+def company_snapshot(today, recent_limit=8, *, user=None):
     """Today's headcount and attendance totals for the whole company."""
-    total = Employee.objects.filter(is_active=True).count()
-    recs = Attendance.objects.filter(date=today, emp__is_active=True)
+    total = _scope(Employee.objects.filter(is_active=True), user).count()
+    recs = _scope(Attendance.objects.filter(date=today, emp__is_active=True), user, "emp__organization")
     return {
         "total": total,
         "present": recs.filter(status__in=["P", "H"]).count(),
@@ -41,8 +42,8 @@ def pending_leave_count():
     return LeaveApplication.objects.filter(status="PENDING").count()
 
 
-def net_payroll_total(month, year):
-    return Salary.objects.filter(month=month, year=year).aggregate(t=Sum("net"))["t"] or 0
+def net_payroll_total(month, year, *, user=None):
+    return _scope(Salary.objects.filter(month=month, year=year), user, "emp__organization").aggregate(t=Sum("net"))["t"] or 0
 
 
 def _with_day_results(emp, records):
@@ -170,22 +171,17 @@ def employee_snapshot(emp, today):
     }
 
 
-def attendance_register(today):
+def attendance_register(today, *, user=None):
     """(employee, today's record or None) for every active employee."""
     records = {a.emp_id: a for a in Attendance.objects.filter(date=today)}
-    return [(e, records.get(e.id)) for e in Employee.objects.filter(is_active=True)]
+    return [(e, records.get(e.id)) for e in _scope(Employee.objects.filter(is_active=True), user)]
 
 
 
-def dashboard_snapshot(day):
-    employee_qs = Employee.objects.filter(
-        is_active=True
-    )
+def dashboard_snapshot(day, *, user=None):
+    employee_qs = _scope(Employee.objects.filter(is_active=True), user)
 
-    attendance_qs = Attendance.objects.filter(
-        date=day,
-        emp__is_active=True,
-    )
+    attendance_qs = _scope(Attendance.objects.filter(date=day, emp__is_active=True), user, "emp__organization")
 
     return {
         "total_employees": employee_qs.count(),
@@ -210,12 +206,14 @@ def dashboard_snapshot(day):
             attendance__date=day
         ).count(),
 
-        "pending_leaves": LeaveApplication.objects.filter(
-            status="PENDING"
-        ).count(),
+        "pending_leaves": _scope(LeaveApplication.objects.filter(status="PENDING"), user, "emp__organization").count(),
     }
 
 
-def department_attendance_summary(day):
+def department_attendance_summary(day, *, user=None):
     """Legacy facade; new code uses apps.organizations.selectors directly."""
-    return organization_selectors.department_attendance_summary(day)
+    return organization_selectors.department_attendance_summary(day, user=user)
+
+
+def _scope(queryset, user, field="organization"):
+    return scope_queryset(queryset, user, field) if user is not None else queryset

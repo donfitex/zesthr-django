@@ -1,5 +1,6 @@
 from datetime import date
 
+from apps.organizations.tenancy import scope_model_queryset
 from django import forms
 from django.contrib.auth import get_user_model
 from django.db.models import Q
@@ -14,7 +15,7 @@ T = forms.TimeInput(attrs={"type": "time"}, format="%H:%M")
 class EmployeeForm(forms.ModelForm):
     class Meta:
         model = Employee
-        fields = ["user", "employee_number", "name", "preferred_name", "date_of_birth", "designation", "basic_salary", "email", "phone", "joined_on",
+        fields = ["organization", "user", "employee_number", "name", "preferred_name", "date_of_birth", "designation", "basic_salary", "email", "phone", "joined_on",
                   "company", "branch", "department", "team", "position", "job_grade", "cost_center",
                   "employment_type", "work_location", "work_schedule", "manager",
                   "employment_status", "confirmation_date",
@@ -22,8 +23,16 @@ class EmployeeForm(forms.ModelForm):
         widgets = {"joined_on": D, "date_of_birth": D, "confirmation_date": D, "address": forms.Textarea(attrs={"rows": 2})}
         labels = {"user": "Login account", "employment_status": "Status", "employee_number": "Employee ID"}
 
-    def __init__(self, *args, can_edit_pay=False, can_link_account=False, can_edit_personal=True, **kwargs):
+    def __init__(self, *args, can_edit_pay=False, can_link_account=False, can_edit_personal=True, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.actor = user
+        if user is not None:
+            for field in self.fields.values():
+                if hasattr(field, "queryset") and field.queryset is not None:
+                    field.queryset = scope_model_queryset(field.queryset, user)
+        self.fields["organization"].required = False
+        if self.instance.pk:
+            self.fields["organization"].disabled = True
         # Restricted fields are removed entirely, so a crafted POST cannot set them either.
         if not can_edit_pay:
             del self.fields["basic_salary"]
@@ -52,10 +61,33 @@ class EmployeeForm(forms.ModelForm):
         managers = Employee.objects.filter(is_active=True)
         if self.instance.pk:
             managers = managers.exclude(pk=self.instance.pk)
-        self.fields["manager"].queryset = managers
+        self.fields["manager"].queryset = scope_model_queryset(managers, user) if user is not None else managers
         for name in ("company", "branch", "department", "team", "position", "job_grade", "cost_center", "employment_type", "work_location", "work_schedule"):
             self.fields[name].queryset = self.fields[name].queryset.filter(
                 **({"is_active": True} if hasattr(self.fields[name].queryset.model, "is_active") else {}))
+
+        if user is not None:
+            for field in self.fields.values():
+                if hasattr(field, "queryset") and field.queryset is not None:
+                    field.queryset = scope_model_queryset(field.queryset, user)
+            if "user" in self.fields and not user.is_superuser:
+                from apps.organizations.models import Organization
+                if Organization.objects.count() > 1:
+                    from apps.organizations.tenancy import organization_ids_for
+                    self.fields["user"].queryset = self.fields["user"].queryset.filter(
+                        organization_memberships__organization_id__in=organization_ids_for(user),
+                        organization_memberships__is_active=True).distinct()
+
+    def clean_organization(self):
+        organization = self.cleaned_data.get("organization")
+        if self.instance.pk:
+            return self.instance.organization
+        if organization is not None or self.actor is None:
+            return organization
+        choices = list(self.fields["organization"].queryset[:2])
+        if len(choices) == 1:
+            return choices[0]
+        raise forms.ValidationError("Select an organization.")
 
 
 class EmployeeSelfForm(forms.ModelForm):

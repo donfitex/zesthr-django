@@ -23,6 +23,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Count, Q
+from apps.organizations.tenancy import scope_queryset
 
 from ..models import Attendance, Employee, Salary
 from . import schedules
@@ -241,7 +242,7 @@ def calculate_employee_payroll(employee, month, year):
     )
 
 
-def calculate_payroll_rows(month, year):
+def calculate_payroll_rows(month, year, *, user=None):
     validate_period(month, year)
 
     employees = (
@@ -255,6 +256,8 @@ def calculate_payroll_rows(month, year):
         .order_by("name")
     )
 
+    if user is not None:
+        employees = scope_queryset(employees, user)
     return [
         calculate_employee_payroll(
             employee,
@@ -266,7 +269,7 @@ def calculate_payroll_rows(month, year):
 
 
 @transaction.atomic
-def generate_payroll(month, year):
+def generate_payroll(month, year, *, user=None):
     """
     Backward-compatible payroll generation.
 
@@ -275,8 +278,7 @@ def generate_payroll(month, year):
     """
 
     rows = calculate_payroll_rows(
-        month,
-        year,
+        month, year, user=user,
     )
 
     for row in rows:

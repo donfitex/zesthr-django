@@ -14,6 +14,7 @@ company holidays and days outside the employee's employment dates are skipped.
 from collections import namedtuple
 from datetime import timedelta
 
+from apps.organizations.tenancy import scope_queryset
 from ..models import Attendance, Employee, Holiday
 from .. import timeutil
 from . import schedules
@@ -43,7 +44,7 @@ def _employed_on(emp, day):
     return emp.is_active or bool(emp.separation_date and day <= emp.separation_date)
 
 
-def find_exceptions(date_from, date_to, *, kinds=DEFAULT_KINDS, department_id=None, emp_id=None):
+def find_exceptions(date_from, date_to, *, kinds=DEFAULT_KINDS, department_id=None, emp_id=None, user=None):
     if date_to < date_from:
         date_from, date_to = date_to, date_from
     if (date_to - date_from).days + 1 > MAX_DAYS:
@@ -51,6 +52,8 @@ def find_exceptions(date_from, date_to, *, kinds=DEFAULT_KINDS, department_id=No
     kinds = set(kinds)
     resolver = schedules.ScheduleResolver()
     people = Employee.objects.select_related("work_schedule", "department__work_schedule", "work_location")
+    if user is not None:
+        people = scope_queryset(people, user)
     if department_id:
         people = people.filter(department_id=department_id)
     if emp_id:

@@ -7,12 +7,13 @@ should import selectors from here rather than query the model directly.
 from django.db.models import Count, Q
 
 from core.models import Department
+from .tenancy import scope_queryset
 
 
-def department_attendance_summary(day):
+def department_attendance_summary(day, *, user=None):
     """Return active departments annotated with their attendance for `day`."""
     return (
-        Department.objects
+        (scope_queryset(Department.objects.all(), user) if user is not None else Department.objects.all())
         .filter(is_active=True)
         .annotate(
             employee_count=Count(

@@ -20,6 +20,8 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from apps.organizations.tenancy import scope_queryset
+from ..models import Employee
 from .. import roles, timeutil
 from ..models import Attendance, AttendanceCorrectionRequest as Request
 from . import attendance as att
@@ -35,14 +37,14 @@ def can_review(user, req):
     if not user.is_authenticated or req.emp.user_id == user.pk:
         return False  # never your own request
     if user.has_perm(roles.REVIEW_CORRECTIONS):
-        return True
+        return scope_queryset(Employee.objects.filter(pk=req.emp_id), user).exists()
     profile = getattr(user, "employee_profile", None)
     return profile is not None and profile.is_active and req.emp.manager_id == profile.pk
 
 
 def reviewable_requests(user):
     """Queryset of the requests this user may decide (any status)."""
-    qs = Request.objects.select_related("emp", "decided_by")
+    qs = scope_queryset(Request.objects.select_related("emp", "decided_by"), user, "emp__organization")
     if user.has_perm(roles.REVIEW_CORRECTIONS):
         return qs.exclude(emp__user=user)
     profile = getattr(user, "employee_profile", None)

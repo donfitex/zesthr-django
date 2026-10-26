@@ -1,3 +1,4 @@
+from apps.organizations.tenancy import scope_queryset
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -22,7 +23,13 @@ from .serializers import (
 )
 
 
-class EmployeeViewSet(viewsets.ReadOnlyModelViewSet):
+class TenantReadOnlyViewSet(viewsets.ReadOnlyModelViewSet):
+    def filter_queryset(self, queryset):
+        field = "organization" if queryset.model is Employee else "emp__organization"
+        return super().filter_queryset(scope_queryset(queryset, self.request.user, field))
+
+
+class EmployeeViewSet(TenantReadOnlyViewSet):
     serializer_class = EmployeeSerializer
     permission_classes = [
         IsAuthenticated,
@@ -41,7 +48,7 @@ class EmployeeViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
-class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
+class AttendanceViewSet(TenantReadOnlyViewSet):
     serializer_class = AttendanceSerializer
     permission_classes = [
         IsAuthenticated,
@@ -57,7 +64,7 @@ class AttendanceViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class LeaveApplicationViewSet(
-    viewsets.ReadOnlyModelViewSet
+    TenantReadOnlyViewSet
 ):
     serializer_class = LeaveApplicationSerializer
     permission_classes = [
@@ -86,7 +93,7 @@ class LeaveApplicationViewSet(
         ).select_related("emp")
 
 
-class SalaryViewSet(viewsets.ReadOnlyModelViewSet):
+class SalaryViewSet(TenantReadOnlyViewSet):
     serializer_class = SalarySerializer
     permission_classes = [
         IsAuthenticated,

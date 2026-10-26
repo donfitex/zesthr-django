@@ -3,6 +3,7 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 
 from apps.organizations.tenancy import scope_queryset
+from apps.organizations.admin_base import TenantAdmin
 
 from . import roles
 from .services import accounts
@@ -11,7 +12,7 @@ from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Emp
 
 
 @admin.register(Employee)
-class EmployeeAdmin(admin.ModelAdmin):
+class EmployeeAdmin(TenantAdmin):
     """The admin site must not be a back door around the role rules."""
 
     list_display = ("employee_number", "name", "organization", "department", "position", "employment_status")
@@ -51,7 +52,7 @@ class EmployeeAdmin(admin.ModelAdmin):
 
 
 for model in (Department, JobPosition, EmploymentType, WorkLocation, WorkSchedule):
-    admin.site.register(model)
+    admin.site.register(model, TenantAdmin)
 
 
 @admin.register(Holiday)
@@ -63,7 +64,7 @@ class HolidayAdmin(admin.ModelAdmin):
 
 
 @admin.register(Attendance)
-class AttendanceAdmin(admin.ModelAdmin):
+class AttendanceAdmin(TenantAdmin):
     """Read-only here: every change must go through the app, which demands a reason and keeps history."""
 
     list_display = ("emp", "date", "status", "check_in", "check_out")
@@ -81,7 +82,7 @@ class AttendanceAdmin(admin.ModelAdmin):
 
 
 @admin.register(AttendanceAudit)
-class AttendanceAuditAdmin(admin.ModelAdmin):
+class AttendanceAuditAdmin(TenantAdmin):
     list_display = ("created_at", "emp", "date", "action", "reason", "changed_by")
     list_filter = ("action",)
     search_fields = ("emp__name", "reason")
@@ -99,7 +100,17 @@ class AttendanceAuditAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         return False
 
-admin.site.register(Salary)
+@admin.register(Salary)
+class SalaryAdmin(TenantAdmin):
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 
 @admin.register(ScheduledEmploymentChange)

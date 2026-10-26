@@ -3,6 +3,7 @@ from datetime import date
 
 from django.db.models import Count, Q
 
+from apps.organizations.tenancy import scope_queryset
 from ..models import Attendance, Employee
 
 
@@ -11,6 +12,7 @@ def attendance_report(
     end_date,
     employee=None,
     department=None,
+    user=None,
 ):
     qs = Attendance.objects.filter(
         date__range=(start_date, end_date)
@@ -19,6 +21,8 @@ def attendance_report(
         "emp__department",
     )
 
+    if user is not None:
+        qs = scope_queryset(qs, user, "emp__organization")
     if employee:
         qs = qs.filter(
             emp=employee
