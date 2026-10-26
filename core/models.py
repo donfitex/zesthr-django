@@ -549,6 +549,39 @@ class EmploymentHistory(AppendOnlyModel):
         return f"{self.employee_id}: {self.field} {self.old_value!r} -> {self.new_value!r}"
 
 
+class ScheduledEmploymentChange(models.Model):
+    """A future-dated transfer or promotion; applying it is a separate HR action."""
+    employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="scheduled_changes")
+    effective_date = models.DateField()
+    reason = models.CharField(max_length=255)
+    designation = models.CharField(max_length=100, blank=True)
+    department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True)
+    manager = models.ForeignKey(Employee, on_delete=models.PROTECT, null=True, blank=True, related_name="scheduled_reports")
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["effective_date", "id"]
+
+    def clean(self):
+        super().clean()
+        if not self.reason or not self.reason.strip():
+            raise ValidationError({"reason": "Explain the employment change."})
+        if not any((self.designation.strip(), self.department_id, self.manager_id)):
+            raise ValidationError("Select at least one employment change.")
+        if self.employee_id:
+            employee = self.employee
+            if self.department_id and self.department.organization_id != employee.organization_id:
+                raise ValidationError({"department": "Select a department in the employee's organization."})
+            if self.manager_id:
+                if self.manager_id == self.employee_id:
+                    raise ValidationError({"manager": "An employee cannot be their own manager."})
+                if self.manager.organization_id != employee.organization_id:
+                    raise ValidationError({"manager": "Select a manager in the employee's organization."})
+
+    def __str__(self):
+        return f"{self.employee} change on {self.effective_date}"
+
+
 
 class AttendanceAudit(AppendOnlyModel):
     """Append-only trail of every attendance change: what it was, what it became, who and why.

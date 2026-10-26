@@ -28,7 +28,7 @@ from . import roles, selectors, timeutil
 from .forms import (AttendanceForm, BulkAttendanceForm, CorrectionRequestForm, DeactivateEmployeeForm, EmployeeForm,
                     EmployeeSelfForm, LeaveApplicationForm)
 from .models import (Attendance, AttendanceAudit, AttendanceCorrectionRequest, Department, Employee, Holiday,
-                     LeaveApplication, Salary)
+                     LeaveApplication, Salary, ScheduledEmploymentChange)
 from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
                           require_employee_profile, require_perm)
 from .services import attendance as attendance_service
@@ -173,6 +173,41 @@ class EmployeeList(PermissionRequiredMixin, ListView):
         ctx.update(self.filters(), departments=scope_queryset(Department.objects.all(), self.request.user), statuses=Employee.STATUS,
                    total_matches=ctx["paginator"].count)
         return ctx
+
+
+@permission_required(roles.CHANGE_EMPLOYEE)
+def scheduled_employment_changes(request):
+    status = request.GET.get("status", "pending")
+    changes = scope_queryset(ScheduledEmploymentChange.objects.select_related(
+        "employee", "department", "manager"), request.user, "employee__organization")
+    if status == "applied":
+        changes = changes.filter(applied_at__isnull=False)
+    elif status == "due":
+        changes = changes.filter(applied_at__isnull=True, effective_date__lte=timezone.localdate())
+    else:
+        status = "pending"
+        changes = changes.filter(applied_at__isnull=True)
+    return render(request, "scheduled_employment_changes.html", {"changes": Paginator(changes, 50).get_page(request.GET.get("page")), "status": status,
+                                                                     "today": timezone.localdate()})
+
+
+@permission_required(roles.CHANGE_EMPLOYEE)
+def apply_scheduled_employment_change(request, pk):
+    if request.method != "POST":
+        raise Http404
+    change = get_object_or_404(scope_queryset(
+        ScheduledEmploymentChange.objects.all(), request.user, "employee__organization"),
+        pk=pk, applied_at__isnull=True)
+    if change.effective_date > timezone.localdate():
+        messages.error(request, "This change is not effective yet.")
+    else:
+        try:
+            employee_service.apply_scheduled_change(change, by=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, "Scheduled employment change applied.")
+    return redirect("scheduled_employment_changes")
 
 
 @login_required

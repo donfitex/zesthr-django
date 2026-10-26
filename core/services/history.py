@@ -3,7 +3,9 @@ from ..models import Employee, EmploymentHistory
 
 # field name -> label shown to people. basic_salary is flagged sensitive.
 TRACKED = {
-    "designation": "Designation", "department": "Department", "position": "Position",
+    "designation": "Designation", "organization": "Organization", "company": "Company", "branch": "Branch",
+    "department": "Department", "team": "Team", "position": "Position", "job_grade": "Job grade",
+    "cost_center": "Cost center",
     "employment_type": "Employment type", "work_location": "Work location", "work_schedule": "Work schedule",
     "manager": "Manager", "employment_status": "Status", "basic_salary": "Basic salary",
 }
@@ -48,4 +50,5 @@ def label(field):
 def refresh_and_snapshot(pk):
     """Snapshot from the database (before a form mutates the in-memory instance)."""
     return snapshot(Employee.objects.select_related(
-        "department", "position", "employment_type", "work_location", "work_schedule", "manager").get(pk=pk))
+        "organization", "company", "branch", "department", "team", "position", "job_grade", "cost_center",
+        "employment_type", "work_location", "work_schedule", "manager").get(pk=pk))

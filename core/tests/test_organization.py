@@ -3,12 +3,14 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.contrib import admin
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
 from core import roles, selectors
-from core.models import Attendance, Department, Employee, EmploymentType, JobPosition, WorkSchedule, validate_working_days
+from core.models import Attendance, Department, Employee, EmploymentType, JobPosition, ScheduledEmploymentChange, WorkSchedule, validate_working_days
 from core.services import employees as svc
 from apps.organizations.models import Organization
 
@@ -121,6 +123,54 @@ class ReferenceDataTests(TestCase):
         night.full_clean()  # overnight is allowed
         with self.assertRaises(ValidationError):
             WorkSchedule(name="Bad", start_time=time(9), end_time=time(9)).full_clean()
+
+
+class ScheduledEmploymentChangeTests(TestCase):
+    def test_applies_once_and_records_history(self):
+        employee = emp("A")
+        employee.designation = "Developer"
+        employee.save()
+        change = ScheduledEmploymentChange.objects.create(
+            employee=employee, effective_date=date(2026, 2, 1), reason="promotion", designation="Senior Developer"
+        )
+
+        svc.apply_scheduled_change(change)
+
+        employee.refresh_from_db()
+        change.refresh_from_db()
+        self.assertEqual(employee.designation, "Senior Developer")
+        self.assertIsNotNone(change.applied_at)
+        self.assertTrue(employee.history.filter(field="designation", new_value="Senior Developer").exists())
+        with self.assertRaises(ValidationError):
+            svc.apply_scheduled_change(change)
+
+    def test_command_applies_only_due_changes(self):
+        due, future = emp("Due"), emp("Future")
+        due_change = ScheduledEmploymentChange.objects.create(
+            employee=due, effective_date=date.today(), reason="promotion", designation="Lead"
+        )
+        future_change = ScheduledEmploymentChange.objects.create(
+            employee=future, effective_date=date(2099, 1, 1), reason="promotion", designation="Lead"
+        )
+
+        call_command("apply_scheduled_employment_changes")
+
+        due_change.refresh_from_db()
+        future_change.refresh_from_db()
+        self.assertIsNotNone(due_change.applied_at)
+        self.assertIsNone(future_change.applied_at)
+
+    def test_applied_change_is_locked_in_admin(self):
+        change = ScheduledEmploymentChange.objects.create(
+            employee=emp("A"), effective_date=date.today(), reason="promotion", designation="Lead"
+        )
+        svc.apply_scheduled_change(change)
+        change.refresh_from_db()
+        model_admin = admin.site._registry[ScheduledEmploymentChange]
+        request = type("Request", (), {"user": User.objects.create_superuser("admin")})()
+
+        self.assertFalse(model_admin.has_change_permission(request, change))
+        self.assertFalse(model_admin.has_delete_permission(request, change))
 
 
 class SafeDeactivationServiceTests(TestCase):

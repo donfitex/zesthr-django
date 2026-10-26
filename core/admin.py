@@ -2,9 +2,11 @@ from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.models import User
 
+from apps.organizations.tenancy import scope_queryset
+
 from . import roles
 from .services import accounts
-from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Employee, EmploymentType, Holiday, JobPosition, Salary, WorkLocation,
+from .models import (AttendanceAudit, SecurityEvent, Attendance, Department, Employee, EmploymentType, Holiday, JobPosition, Salary, ScheduledEmploymentChange, WorkLocation,
                      WorkSchedule)
 
 
@@ -98,6 +100,31 @@ class AttendanceAuditAdmin(admin.ModelAdmin):
         return False
 
 admin.site.register(Salary)
+
+
+@admin.register(ScheduledEmploymentChange)
+class ScheduledEmploymentChangeAdmin(admin.ModelAdmin):
+    list_display = ("employee", "effective_date", "designation", "department", "manager", "applied_at")
+    list_filter = ("effective_date",)
+    search_fields = ("employee__name", "reason", "designation")
+    date_hierarchy = "effective_date"
+    readonly_fields = ("applied_at",)
+
+    def get_queryset(self, request):
+        return scope_queryset(super().get_queryset(request), request.user, "employee__organization")
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name in ("employee", "manager"):
+            kwargs["queryset"] = scope_queryset(Employee.objects.all(), request.user)
+        elif db_field.name == "department":
+            kwargs["queryset"] = scope_queryset(Department.objects.all(), request.user)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def has_change_permission(self, request, obj=None):
+        return super().has_change_permission(request, obj) and not (obj and obj.applied_at)
+
+    def has_delete_permission(self, request, obj=None):
+        return super().has_delete_permission(request, obj) and not (obj and obj.applied_at)
 
 
 admin.site.unregister(User)
