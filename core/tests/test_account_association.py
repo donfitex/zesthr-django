@@ -1,3 +1,4 @@
+from django.utils import timezone
 from datetime import date
 from django.urls import reverse
 
@@ -33,7 +34,7 @@ class MissingProfileTests(BaseTest):
     def test_user_without_profile_cannot_punch(self):
         self.login(self.nobody)
         self.assertEqual(self.client.post(reverse("attendance_today"), {"action": "check_in"}).status_code, 403)
-        self.assertEqual(Attendance.objects.filter(date=date.today()).count(), 0)
+        self.assertEqual(Attendance.objects.filter(date=timezone.localdate()).count(), 0)
 
     def test_nav_does_not_offer_leave_application_without_profile(self):
         self.login(self.hr_admin)
@@ -54,13 +55,13 @@ class SubmittedIdsCannotOverrideIdentityTests(BaseTest):
         self.login(self.alice_user)
         r = self.client.post(reverse("attendance_today"), {"emp_id": self.bob.pk, "action": "check_in"})
         self.assertEqual(r.status_code, 403)
-        self.assertFalse(Attendance.objects.filter(date=date.today()).exists())
+        self.assertFalse(Attendance.objects.filter(date=timezone.localdate()).exists())
 
     def test_punch_with_own_id_works(self):
         self.login(self.alice_user)
         r = self.client.post(reverse("attendance_today"), {"emp_id": self.alice.pk, "action": "check_in"})
         self.assertEqual(r.status_code, 302)
-        self.assertTrue(Attendance.objects.filter(emp=self.alice, date=date.today()).exists())
+        self.assertTrue(Attendance.objects.filter(emp=self.alice, date=timezone.localdate()).exists())
 
     def test_garbage_employee_id_is_a_404_not_a_server_error(self):
         for user in (self.alice_user, self.hr_admin):
@@ -72,7 +73,7 @@ class SubmittedIdsCannotOverrideIdentityTests(BaseTest):
         self.login(self.hr_officer)
         r = self.client.post(reverse("attendance_today"), {"emp_id": self.bob.pk, "action": "A"})
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(Attendance.objects.get(emp=self.bob, date=date.today()).status, "A")
+        self.assertEqual(Attendance.objects.get(emp=self.bob, date=timezone.localdate()).status, "A")
 
 
 class InactiveEmployeeTests(BaseTest):

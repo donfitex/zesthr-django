@@ -14,7 +14,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Reads <project root>/.env if it exists. override=False: real environment
 # variables (e.g. set by the hosting platform) always win over the file.
-load_dotenv(BASE_DIR / ".env", override=False)
+if env_bool("DJANGO_LOAD_DOTENV", True):
+    load_dotenv(BASE_DIR / ".env", override=False)
 
 INSTALLED_APPS = [
     "django.contrib.admin",

@@ -7,6 +7,8 @@ from django.test import SimpleTestCase
 
 ROOT = Path(__file__).resolve().parents[2]
 GOOD = {
+    "DJANGO_LOAD_DOTENV": "False",
+    "DJANGO_DEBUG": "False",
     "DJANGO_SETTINGS_MODULE": "payroll_project.settings.production",
     "DJANGO_SECRET_KEY": "q7Zk-R2mVx9LpT4wYb8NcD3hJf6GsA1eUo5iKy0XrWt2MvBnCzHj7PdQaLgE4S9u",
     "DJANGO_ALLOWED_HOSTS": "hr.example.com",
@@ -16,7 +18,7 @@ GOOD = {
 
 
 def run_check(overrides):
-    env = {"PATH": os.environ["PATH"], **GOOD, **overrides}
+    env = {"PATH": os.environ["PATH"], **{k: os.environ[k] for k in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP") if k in os.environ}, **GOOD, **overrides}
     env = {k: v for k, v in env.items() if v is not None}
     return subprocess.run([sys.executable, "manage.py", "check"], cwd=ROOT,
                           env=env, capture_output=True, text=True)

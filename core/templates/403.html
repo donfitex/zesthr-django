@@ -3,7 +3,7 @@
 {% block content %}
 <div class="head"><h1>Access denied</h1></div>
 <section class="card">
-  <p>You don't have permission to view this page.</p>
+  <p>{{ exception|default:"You do not have permission to view this page." }}</p>
   <p>If you think this is a mistake, ask your HR administrator to review your role.</p>
   <p><a class="btn" href="{% url 'home' %}">Back to home</a></p>
 </section>

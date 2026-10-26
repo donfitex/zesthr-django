@@ -121,8 +121,8 @@ attendance.check_in(amy, now=time(9), today=date(2026, 1, 6), by=u)
 
     @classmethod
     def manage(cls, db_path, *args):
-        env = {"PATH": os.environ["PATH"], "DJANGO_SETTINGS_MODULE": "payroll_project.settings.development",
-               "DJANGO_SQLITE_PATH": str(db_path), "DJANGO_SECRET_KEY": "x" * 60}
+        env = {"PATH": os.environ["PATH"], **{k: os.environ[k] for k in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP") if k in os.environ}, "DJANGO_SETTINGS_MODULE": "payroll_project.settings.development",
+               "DJANGO_LOAD_DOTENV": "False", "DJANGO_SQLITE_PATH": str(db_path), "DJANGO_SECRET_KEY": "x" * 60}
         return subprocess.run([sys.executable, "manage.py", *args], cwd=cls.ROOT, env=env,
                               capture_output=True, text=True)
 

@@ -20,7 +20,7 @@
     </p>
   </div>
   <div class="actions">
-    <a class="btn" href="{% url 'leave_apply' %}">+ Apply for Leave</a>
+    {% if user.employee_profile.is_active %}<a class="btn" href="{% url 'leave_apply' %}">+ Apply for Leave</a>{% endif %}
     <a class="btn ghost" href="{% url 'holidays' %}">🇮🇳 Govt Holidays</a>
   </div>
 </div>

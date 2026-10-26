@@ -106,6 +106,8 @@ def dashboard(request):
     )
 
     context = {
+        **selectors.company_snapshot(today),
+        "payroll": selectors.net_payroll_total(today.month, today.year) if request.user.has_perm(roles.VIEW_PAYROLL_REPORT) else None,
         "today": today,
         "snapshot": snapshot,
         "departments": departments,

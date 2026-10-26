@@ -6,6 +6,9 @@ def _sync_roles(sender, **kwargs):
     from .roles import sync_roles
 
     sync_roles()
+    from .models import EmploymentType
+    for name in ("Full-time", "Part-time", "Contract"):
+        EmploymentType.objects.get_or_create(name=name)
 
 
 class CoreConfig(AppConfig):

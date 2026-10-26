@@ -2,7 +2,7 @@ import os
 import subprocess
 import sys
 
-from django.test import Client, SimpleTestCase, override_settings
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 
 from .test_settings import GOOD, ROOT, run_check
 
@@ -17,7 +17,7 @@ SECURE = dict(
 
 
 @override_settings(**SECURE)
-class TransportSecurityTests(SimpleTestCase):
+class TransportSecurityTests(TestCase):
     def test_http_redirects_to_https(self):
         r = Client().get("/login/", HTTP_HOST="hr.example.com")
         self.assertEqual(r.status_code, 301)
@@ -46,7 +46,7 @@ class ProductionConfigTests(SimpleTestCase):
         self.assertNotEqual(run_check({"DJANGO_HSTS_PRELOAD": "True"}).returncode, 0)
 
     def test_deployment_check_passes_with_hsts(self):
-        env = {"PATH": os.environ["PATH"], **GOOD, "DJANGO_HSTS_SECONDS": "31536000",
+        env = {"PATH": os.environ["PATH"], **{k: os.environ[k] for k in ("SYSTEMROOT", "WINDIR", "TEMP", "TMP") if k in os.environ}, **GOOD, "DJANGO_HSTS_SECONDS": "31536000",
                "DJANGO_HSTS_INCLUDE_SUBDOMAINS": "True"}
         r = subprocess.run([sys.executable, "manage.py", "check", "--deploy", "--fail-level", "WARNING"],
                            cwd=ROOT, env=env, capture_output=True, text=True)

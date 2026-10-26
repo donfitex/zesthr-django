@@ -10,13 +10,13 @@ def review_flags(request):
     """
     user = request.user
     if not user.is_authenticated:
-        return {}
+        return {"pending_corrections": None}
     profile = getattr(user, "employee_profile", None)
     is_hr = user.has_perm("core.review_attendance_corrections")
     if profile is None and not is_hr:
-        return {}
+        return {"pending_corrections": None}
     is_manager = profile is not None and Employee.objects.filter(manager=profile, is_active=True).exists()
     if not (is_hr or is_manager):
-        return {}
+        return {"pending_corrections": None}
     pending = corrections.reviewable_requests(user).filter(status=AttendanceCorrectionRequest.PENDING).count()
     return {"is_correction_reviewer": True, "pending_corrections": pending}

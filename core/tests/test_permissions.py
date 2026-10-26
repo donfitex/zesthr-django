@@ -1,3 +1,4 @@
+from django.utils import timezone
 from datetime import date
 from decimal import Decimal
 
@@ -90,12 +91,12 @@ class AnonymousAccessTests(BaseTest):
             self.assertIn("/login/", r["Location"], url)
 
     def test_home_page_hides_live_company_data_from_visitors(self):
-        Attendance.objects.create(emp=self.alice, date=date.today())
+        Attendance.objects.create(emp=self.alice, date=timezone.localdate())
         html = self.client.get(reverse("home")).content.decode()
         self.assertNotIn("Alice", html)
 
     def test_home_page_shows_live_data_to_authorized_staff(self):
-        Attendance.objects.create(emp=self.alice, date=date.today())
+        Attendance.objects.create(emp=self.alice, date=timezone.localdate())
         self.login(self.hr_admin)
         self.assertIn("Alice", self.client.get(reverse("home")).content.decode())
 
@@ -134,19 +135,19 @@ class EmployeeCannotUseAdminFunctionsTests(BaseTest):
         self.login(self.alice_user)
         r = self.client.post(reverse("attendance_today"), {"emp_id": self.bob.pk, "action": "check_in"})
         self.assertEqual(r.status_code, 403)
-        self.assertFalse(Attendance.objects.filter(emp=self.bob, date=date.today()).exists())
+        self.assertFalse(Attendance.objects.filter(emp=self.bob, date=timezone.localdate()).exists())
 
     def test_cannot_grant_self_leave_status(self):
         self.login(self.alice_user)
         r = self.client.post(reverse("attendance_today"), {"emp_id": self.alice.pk, "action": "L"})
         self.assertEqual(r.status_code, 403)
-        self.assertFalse(Attendance.objects.filter(emp=self.alice, date=date.today(), status="L").exists())
+        self.assertFalse(Attendance.objects.filter(emp=self.alice, date=timezone.localdate(), status="L").exists())
 
     def test_can_punch_own_attendance(self):
         self.login(self.alice_user)
         r = self.client.post(reverse("attendance_today"), {"action": "check_in"})
         self.assertEqual(r.status_code, 302)
-        self.assertTrue(Attendance.objects.get(emp=self.alice, date=date.today()).check_in)
+        self.assertTrue(Attendance.objects.get(emp=self.alice, date=timezone.localdate()).check_in)
 
     def test_sees_only_own_attendance_log(self):
         Attendance.objects.create(emp=self.bob, date=date(2026, 1, 6))

@@ -115,11 +115,11 @@ class LoginPageTests(BaseTest):
         self.assertNotContains(self.client.get(reverse("login")), "admin123")
 
     @override_settings(DEBUG=True)
-    def test_demo_credentials_only_shown_in_development(self):
-        self.assertContains(self.client.get(reverse("login")), "admin123")
+    def test_demo_credentials_are_also_hidden_in_development(self):
+        self.assertNotContains(self.client.get(reverse("login")), "admin123")
 
     def test_landing_page_depends_on_what_the_account_can_use(self):
-        for user, target in ((self.hr_admin, "dashboard"), (self.alice_user, "dashboard"), (self.sysadmin, "home")):
+        for user, target in ((self.hr_admin, "dashboard"), (self.alice_user, "dashboard"), (self.sysadmin, "account_pending")):
             self.client.logout()
             r = self.client.post(reverse("login"), LOGIN(user.username))
             self.assertRedirects(r, reverse(target), fetch_redirect_response=False)
