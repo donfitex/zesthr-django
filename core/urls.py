@@ -1,3 +1,4 @@
+from . import views_leave
 from django.contrib.auth import views as auth
 from django.contrib.auth.decorators import login_required
 from django.urls import path
@@ -7,6 +8,8 @@ from . import views as v
 from . import views_auth as a
 
 urlpatterns = [
+    path("leaves/balances/", views_leave.balances, name="leave_balances"),
+    path("employees/<int:pk>/leave-balances/", views_leave.balances, name="employee_leave_balances"),
     path("login/", a.LoginView.as_view(), name="login"),
     path("password/change/", login_required(a.PasswordChangeView.as_view()), name="password_change"),
     path("password/reset/", a.PasswordResetView.as_view(), name="password_reset"),

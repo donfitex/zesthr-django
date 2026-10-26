@@ -40,6 +40,8 @@ def scope_model_queryset(queryset, user):
         "employee": "organization", "department": "organization",
         "jobposition": "department__organization",
         "attendance": "emp__organization", "attendanceaudit": "emp__organization",
+        "leaveentitlement": "employee__organization",
+        "leavebalanceadjustment": "entitlement__employee__organization",
         "salary": "emp__organization", "leaveapplication": "emp__organization",
     }
     path = paths.get(queryset.model._meta.model_name)

@@ -12,7 +12,8 @@ from apps.organizations.tenancy import scope_queryset
 from .. import roles
 from ..models import Attendance, AttendanceAudit, Employee, LeaveApplication, LeaveDecision
 from . import attendance as attendance_service
-from . import notifications
+from . import notifications, leave_balances
+from ..models import LeaveEntitlement
 
 SICK_LEAVE_MAX_DAYS = 1
 SICK_LEAVE_MONTHLY_QUOTA = 1
@@ -27,7 +28,9 @@ def validate_leave_request(employee, leave_type, start, end, *, exclude_pk=None)
         raise ValidationError("A leave request may cover at most 366 days.")
     if leave_type not in dict(LeaveApplication.LEAVE_TYPES):
         raise ValidationError("Choose a valid leave type.")
-    if leave_type == "SL" and (end - start).days + 1 > SICK_LEAVE_MAX_DAYS:
+    configured = employee is not None and LeaveEntitlement.objects.filter(
+        employee=employee, leave_type=leave_type, year=start.year).exists()
+    if leave_type == "SL" and not configured and (end - start).days + 1 > SICK_LEAVE_MAX_DAYS:
         raise ValidationError("Sick leave allowance is strictly 1 day per month.")
     if employee is None:
         return
@@ -37,7 +40,8 @@ def validate_leave_request(employee, leave_type, start, end, *, exclude_pk=None)
         emp=employee, status__in=["PENDING", "APPROVED"]).exclude(pk=exclude_pk)
     if applications.filter(start_date__lte=end, end_date__gte=start).exists():
         raise ValidationError("This request overlaps pending or approved leave.")
-    if leave_type == "SL":
+    leave_balances.validate_entitlements(employee, leave_type, start, end, exclude_pk=exclude_pk)
+    if leave_type == "SL" and not configured:
         used = applications.filter(leave_type="SL", start_date__year=start.year,
                                    start_date__month=start.month).count()
         if used >= SICK_LEAVE_MONTHLY_QUOTA:

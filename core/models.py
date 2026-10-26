@@ -1128,3 +1128,41 @@ class LeaveDecision(AppendOnlyModel):
     class Meta:
         ordering = ["-created_at", "-pk"]
         constraints = [models.UniqueConstraint(fields=["leave", "status"], name="leave_decision_once")]
+
+
+class LeaveEntitlement(models.Model):
+    employee = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="leave_entitlements")
+    leave_type = models.CharField(max_length=5, choices=LeaveApplication.LEAVE_TYPES)
+    year = models.PositiveSmallIntegerField(validators=[MinValueValidator(2000), MaxValueValidator(2100)])
+    annual_days = models.DecimalField(max_digits=6, decimal_places=2, validators=[MinValueValidator(0)])
+    carryover_days = models.DecimalField(max_digits=6, decimal_places=2, default=0, validators=[MinValueValidator(0)])
+    monthly_accrual = models.BooleanField(default=False)
+    working_days_only = models.BooleanField(default=False)
+    monthly_limit = models.PositiveSmallIntegerField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["employee", "leave_type", "year"], name="leave_entitlement_year_unique"),
+            models.CheckConstraint(condition=models.Q(annual_days__gte=0, carryover_days__gte=0),
+                                   name="leave_entitlement_nonnegative"),
+        ]
+
+    def __str__(self):
+        return f"{self.employee}: {self.leave_type} {self.year}"
+
+
+class LeaveBalanceAdjustment(AppendOnlyModel):
+    entitlement = models.ForeignKey(LeaveEntitlement, on_delete=models.PROTECT, related_name="adjustments")
+    days = models.DecimalField(max_digits=6, decimal_places=2)
+    reason = models.CharField(max_length=255)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [models.CheckConstraint(condition=~models.Q(days=0), name="leave_adjustment_nonzero")]
+
+    def clean(self):
+        super().clean()
+        if not self.reason.strip():
+            raise ValidationError({"reason": "Explain the balance adjustment."})

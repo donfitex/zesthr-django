@@ -146,3 +146,10 @@ def sync_roles():
                 Permission.objects.get(content_type__app_label=app_label, codename=code)
             )
         group.permissions.set(permissions)
+
+
+for _role in (SUPER_ADMIN, HR_ADMIN, HR_MANAGER):
+    ROLE_PERMISSIONS[_role] += [
+        "core.view_leaveentitlement", "core.add_leaveentitlement", "core.change_leaveentitlement",
+        "core.view_leavebalanceadjustment", "core.add_leavebalanceadjustment",
+    ]

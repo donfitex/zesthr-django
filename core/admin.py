@@ -219,3 +219,28 @@ class LeaveDecisionAdmin(TenantAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+from .models import LeaveEntitlement, LeaveBalanceAdjustment
+
+
+@admin.register(LeaveEntitlement)
+class LeaveEntitlementAdmin(TenantAdmin):
+    list_display = ("employee", "leave_type", "year", "annual_days", "monthly_accrual")
+    list_filter = ("year", "leave_type")
+
+
+@admin.register(LeaveBalanceAdjustment)
+class LeaveBalanceAdjustmentAdmin(TenantAdmin):
+    list_display = ("entitlement", "days", "reason", "changed_by", "created_at")
+    readonly_fields = ("changed_by", "created_at")
+
+    def save_model(self, request, obj, form, change):
+        obj.changed_by = request.user
+        obj.save()
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
