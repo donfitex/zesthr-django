@@ -11,7 +11,7 @@ from core.services import leave as svc
 
 class LeaveServiceTests(TestCase):
     def setUp(self):
-        self.emp = Employee.objects.create(name="Ann", designation="Dev", basic_salary=Decimal("1000"))
+        self.emp = Employee.objects.create(name="Ann", designation="Dev", basic_salary=Decimal("1000"), joined_on=date(2025, 1, 1))
 
     def req(self, **kw):
         base = dict(leave_type="CL", start_date=date(2026, 3, 2), end_date=date(2026, 3, 4), reason="r")
@@ -49,15 +49,14 @@ class LeaveServiceTests(TestCase):
         self.assertFalse(LeaveApplication.objects.exists())
 
     # --- approve / reject ---
-    def test_approve_marks_every_day_as_leave_and_overwrites_existing_punches(self):
+    def test_approval_preserves_existing_punches_and_requires_review(self):
         Attendance.objects.create(emp=self.emp, date=date(2026, 3, 3), status="P", check_in="09:00")
         leave = svc.submit_leave(self.emp, **self.req())
-        svc.approve_leave(leave, "ok")
-        days = Attendance.objects.filter(emp=self.emp).order_by("date")
-        self.assertEqual([(a.date.day, a.status, a.check_in) for a in days],
-                         [(2, "L", None), (3, "L", None), (4, "L", None)])
+        with self.assertRaisesMessage(ValidationError, "punches conflict"):
+            svc.approve_leave(leave, "ok")
         leave.refresh_from_db()
-        self.assertEqual((leave.status, leave.admin_note), ("APPROVED", "ok"))
+        self.assertEqual(leave.status, "PENDING")
+        self.assertEqual(Attendance.objects.get().status, "P")
 
     def test_reject_creates_no_attendance(self):
         leave = svc.submit_leave(self.emp, **self.req())
@@ -68,7 +67,7 @@ class LeaveServiceTests(TestCase):
 
     def test_approval_is_all_or_nothing(self):
         leave = svc.submit_leave(self.emp, **self.req())
-        real = Attendance.objects.update_or_create
+        real = svc.attendance_service.save_manual
         calls = {"n": 0}
 
         def flaky(*a, **kw):
@@ -77,7 +76,7 @@ class LeaveServiceTests(TestCase):
                 raise RuntimeError("database went away")
             return real(*a, **kw)
 
-        with mock.patch.object(Attendance.objects, "update_or_create", side_effect=flaky):
+        with mock.patch.object(svc.attendance_service, "save_manual", side_effect=flaky):
             with self.assertRaises(RuntimeError):
                 svc.approve_leave(leave)
         leave.refresh_from_db()

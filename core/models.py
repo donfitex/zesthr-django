@@ -440,6 +440,7 @@ class LeaveApplication(models.Model):
         ("PENDING", "Pending"),
         ("APPROVED", "Approved"),
         ("REJECTED", "Rejected"),
+        ("CANCELLED", "Cancelled"),
     ]
     emp = models.ForeignKey(Employee, on_delete=models.PROTECT, related_name="leaves")
     leave_type = models.CharField(max_length=5, choices=LEAVE_TYPES, default="SL")
@@ -1113,3 +1114,17 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class LeaveDecision(AppendOnlyModel):
+    """Immutable decision and attendance state used for a safe reversal."""
+    leave = models.ForeignKey(LeaveApplication, on_delete=models.PROTECT, related_name="decisions")
+    status = models.CharField(max_length=10, choices=LeaveApplication.STATUS)
+    decided_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    note = models.CharField(max_length=255, blank=True)
+    previous_attendance = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]
+        constraints = [models.UniqueConstraint(fields=["leave", "status"], name="leave_decision_once")]

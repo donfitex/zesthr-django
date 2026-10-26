@@ -195,3 +195,27 @@ class SecurityEventAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+from .models import LeaveDecision
+
+
+@admin.register(LeaveDecision)
+class LeaveDecisionAdmin(TenantAdmin):
+    list_display = ("leave", "status", "decided_by", "created_at")
+
+    def get_queryset(self, request):
+        return scope_queryset(LeaveDecision.objects.select_related("leave__emp", "decided_by"),
+                              request.user, "leave__emp__organization")
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm(roles.APPROVE_LEAVE)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

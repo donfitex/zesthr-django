@@ -25,7 +25,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .. import timeutil
-from ..models import Attendance, AttendanceAudit
+from ..models import Attendance, AttendanceAudit, Employee
 from .schedules import resolve_schedule
 
 MARKABLE_STATUSES = ("A", "H", "L")  # statuses HR may set explicitly
@@ -57,6 +57,7 @@ def record_audit(action, rec, before, *, by=None, reason="", day=None, emp=None,
 
 
 def _require_active(emp):
+    emp = Employee.objects.select_for_update().get(pk=emp.pk)
     if not emp.is_active:
         raise AttendanceError("inactive_employee", f"{emp.name} is not an active employee, so attendance cannot be recorded.")
 
@@ -204,6 +205,7 @@ def save_manual(emp, day, *, status, check_in=None, check_out=None, ends_next_da
     """
     if not (reason or "").strip():
         raise AttendanceError("reason_required", "A reason is required for manual attendance changes.")
+    Employee.objects.select_for_update().get(pk=emp.pk)
     wanted = build_candidate(emp, day, status=status, check_in=check_in, check_out=check_out, ends_next_day=ends_next_day)
     validate_candidate(wanted)
     rec, created = Attendance.objects.select_for_update().get_or_create(

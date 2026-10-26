@@ -869,9 +869,13 @@ def leave_apply(request):
     if request.method == "POST":
         form = LeaveApplicationForm(request.POST, employee=emp_profile)
         if form.is_valid():
-            leave = leave_service.submit_leave(emp_profile, **form.cleaned_data)
-            messages.success(request, f"Leave application for {leave.days_count} day(s) submitted. Awaiting HR review.")
-            return redirect("leaves_list")
+            try:
+                leave = leave_service.submit_leave(emp_profile, **form.cleaned_data)
+            except ValidationError as exc:
+                form.add_error(None, exc)
+            else:
+                messages.success(request, f"Leave application for {leave.days_count} day(s) submitted. Awaiting HR review.")
+                return redirect("leaves_list")
     else:
         form = LeaveApplicationForm(employee=emp_profile, initial={"start_date": today, "end_date": today})
 
@@ -891,12 +895,20 @@ def leave_action(request, pk):
     if request.method == "POST":
         action = request.POST.get("action")
         note = request.POST.get("admin_note", "").strip()
-        if action == "approve":
-            leave_service.approve_leave(leave, note)
-            messages.success(request, f"Leave for {leave.emp.name} approved. Dates recorded as Paid Leave.")
-        elif action == "reject":
-            leave_service.reject_leave(leave, note)
-            messages.info(request, f"Leave application for {leave.emp.name} rejected.")
+        try:
+            if action == "approve":
+                leave_service.approve_leave(leave, note, by=request.user)
+                messages.success(request, "Leave approved and attendance recorded.")
+            elif action == "reject":
+                leave_service.reject_leave(leave, note, by=request.user)
+                messages.info(request, "Leave rejected.")
+            elif action == "cancel":
+                leave_service.cancel_leave(leave, by=request.user, note=note)
+                messages.info(request, "Leave cancelled and attendance restored.")
+            else:
+                messages.error(request, "Choose a valid leave action.")
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
 
     return redirect("leaves_list")
 

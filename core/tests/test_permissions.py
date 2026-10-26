@@ -33,8 +33,8 @@ class BaseTest(TestCase):
 
         cls.alice_user = make_user("alice", roles.EMPLOYEE)
         cls.bob_user = make_user("bob", roles.EMPLOYEE)
-        cls.alice = Employee.objects.create(user=cls.alice_user, name="Alice", designation="Dev", basic_salary=Decimal("30000"))
-        cls.bob = Employee.objects.create(user=cls.bob_user, name="Bob", designation="QA", basic_salary=Decimal("31000"))
+        cls.alice = Employee.objects.create(user=cls.alice_user, name="Alice", designation="Dev", basic_salary=Decimal("30000"), joined_on=date(2025, 1, 1))
+        cls.bob = Employee.objects.create(user=cls.bob_user, name="Bob", designation="QA", basic_salary=Decimal("31000"), joined_on=date(2025, 1, 1))
         cls.alice_slip = Salary.objects.create(emp=cls.alice, month=1, year=2026, gross=30000, net=30000)
         cls.bob_slip = Salary.objects.create(emp=cls.bob, month=1, year=2026, gross=31000, net=31000)
         cls.alice_att = Attendance.objects.create(emp=cls.alice, date=date(2026, 1, 5))

@@ -114,7 +114,13 @@
           </td>
           {% if is_staff %}
             <td>
-              {% if l.status == "PENDING" %}
+              {% if l.status == "APPROVED" %}
+                  <form method="post" action="{% url 'leave_action' l.id %}">
+                    {% csrf_token %}
+                    <label>Cancellation reason <input name="admin_note" required maxlength="255"></label>
+                    <button class="btn sm ghost danger" name="action" value="cancel">Cancel and restore attendance</button>
+                  </form>
+                {% elif l.status == "PENDING" %}
                 <form method="post" action="{% url 'leave_action' l.id %}" style="display: flex; flex-direction: column; gap: .4rem;">
                   {% csrf_token %}
                   <input type="text" name="admin_note" placeholder="Remark / reason (optional)"

@@ -16,23 +16,13 @@ def notify(
     if not user:
         return None
 
+    values = dict(notification_type=notification_type, title=title, message=message, url=url)
     if unique_key:
-        existing = Notification.objects.filter(
-            recipient=user,
-            unique_key=unique_key,
-        ).first()
+        notification, _ = Notification.objects.get_or_create(
+            recipient=user, unique_key=unique_key, defaults=values)
+        return notification
+    return Notification.objects.create(recipient=user, unique_key="", **values)
 
-        if existing:
-            return existing
-
-    return Notification.objects.create(
-        recipient=user,
-        notification_type=notification_type,
-        title=title,
-        message=message,
-        url=url,
-        unique_key=unique_key,
-    )
 
 
 def notify_leave_decision(leave):
@@ -48,7 +38,7 @@ def notify_leave_decision(leave):
             f"request has been "
             f"{leave.get_status_display().lower()}."
         ),
-        url=f"/leaves/{leave.pk}/",
+        url="/leaves/",
         unique_key=f"leave:{leave.pk}:{leave.status}",
     )
 
