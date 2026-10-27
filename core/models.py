@@ -1203,3 +1203,5 @@ class PayrollEvent(AppendOnlyModel):
 
 
 from .models_documents import EmployeeDocument, DocumentEvent  # noqa: E402,F401
+
+from .models_anomalies import AttendanceAnomaly, AnomalyDecision  # noqa: E402,F401

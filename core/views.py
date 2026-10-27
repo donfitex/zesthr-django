@@ -401,6 +401,10 @@ def attendance_today(request):
                 # Unknown action: change nothing (it used to create a "Present" record).
                 messages.error(request, "Unknown attendance action.")
         except attendance_service.AttendanceError as exc:
+            if exc.code in ("already_checked_in", "already_checked_out"):
+                from .services.anomalies import record
+                record(emp, timeutil.today_for(emp), "DUPLICATE_PUNCH",
+                       {"action": action, "message": "Repeated submission; confirm whether this was a retry."})
             messages.error(request, str(exc))
 
         if not can_mark_others:

@@ -1,3 +1,4 @@
+from . import views_anomalies
 from . import views_documents
 from . import views_payroll
 from . import views_leave
@@ -10,6 +11,8 @@ from . import views as v
 from . import views_auth as a
 
 urlpatterns = [
+    path("attendance/reviews/", views_anomalies.queue, name="anomaly_queue"),
+    path("attendance/reviews/<int:pk>/", views_anomalies.review, name="anomaly_review"),
     path("employees/<int:pk>/documents/", views_documents.document_list, name="employee_documents"),
     path("documents/<int:pk>/download/", views_documents.download, name="document_download"),
     path("documents/<int:pk>/purge/", views_documents.request_purge, name="document_request_purge"),
