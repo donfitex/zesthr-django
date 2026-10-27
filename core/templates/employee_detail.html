@@ -7,6 +7,7 @@
     <p class="muted">{{ emp.employee_number|default:"" }} · <span class="tag {% if emp.is_active %}P{% else %}A{% endif %}">{{ emp.get_employment_status_display }}</span></p>
   </div>
   <div class="row-actions">
+    {% if access.personal %}<a class="btn ghost" href="{% url 'employee_documents' emp.pk %}">Documents</a>{% endif %}
     {% if access.employment %}<a class="btn ghost" href="{% url 'employee_leave_balances' emp.pk %}">Leave balances</a>{% endif %}
     {% if access.is_self and emp.is_active %}<a class="btn" href="{% url 'my_profile_edit' %}">Edit my details</a>{% endif %}
     {% if perms.core.change_employee %}<a class="btn" href="{% url 'employee_edit' emp.pk %}">Edit employee</a>{% endif %}

@@ -1200,3 +1200,6 @@ class PayrollEvent(AppendOnlyModel):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+from .models_documents import EmployeeDocument, DocumentEvent  # noqa: E402,F401

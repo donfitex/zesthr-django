@@ -165,3 +165,12 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 50,
 }
+
+DOCUMENT_UPLOADS_ENABLED = env_bool("DJANGO_DOCUMENT_UPLOADS_ENABLED", True)
+PRIVATE_DOCUMENT_ROOT = env("DJANGO_PRIVATE_DOCUMENT_ROOT", "").strip() or str(BASE_DIR / "private_documents")
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    "private_documents": {"BACKEND": "django.core.files.storage.FileSystemStorage",
+                          "OPTIONS": {"location": PRIVATE_DOCUMENT_ROOT, "base_url": None}},
+}

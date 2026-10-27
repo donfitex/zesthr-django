@@ -1,3 +1,4 @@
+from . import views_documents
 from . import views_payroll
 from . import views_leave
 from django.contrib.auth import views as auth
@@ -9,6 +10,9 @@ from . import views as v
 from . import views_auth as a
 
 urlpatterns = [
+    path("employees/<int:pk>/documents/", views_documents.document_list, name="employee_documents"),
+    path("documents/<int:pk>/download/", views_documents.download, name="document_download"),
+    path("documents/<int:pk>/purge/", views_documents.request_purge, name="document_request_purge"),
     path("payroll/runs/", views_payroll.runs, name="payroll_runs"),
     path("payroll/runs/<int:pk>/", views_payroll.run_detail, name="payroll_run_detail"),
     path("payroll/export.csv", views_payroll.payroll_csv, name="payroll_csv"),

@@ -1,3 +1,4 @@
+from pathlib import Path
 """Production settings (default for wsgi.py).
 
 Everything sensitive comes from real environment variables. If a critical value
@@ -115,6 +116,7 @@ DATABASES = {
 WHITENOISE_MANIFEST_STRICT = False
 MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 STORAGES = {
+    **STORAGES,
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
@@ -150,3 +152,10 @@ if SECURE_HSTS_PRELOAD and not (SECURE_HSTS_INCLUDE_SUBDOMAINS and SECURE_HSTS_S
     raise ImproperlyConfigured(
         "HSTS preload requires DJANGO_HSTS_INCLUDE_SUBDOMAINS=True and DJANGO_HSTS_SECONDS >= 31536000."
     )
+
+# Enable uploads only after a private durable storage location has been supplied.
+DOCUMENT_UPLOADS_ENABLED = env_bool("DJANGO_DOCUMENT_UPLOADS_ENABLED", False)
+if DOCUMENT_UPLOADS_ENABLED:
+    _private_root = Path(require_env("DJANGO_PRIVATE_DOCUMENT_ROOT"))
+    if not _private_root.is_absolute() or _private_root.resolve().is_relative_to(Path(STATIC_ROOT).resolve()):
+        raise ImproperlyConfigured("Private document storage must be an absolute path outside static assets.")

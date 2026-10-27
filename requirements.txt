@@ -9,3 +9,4 @@ requests>=2.32,<3.0
 gunicorn>=22.0
 django_filter>=26.2
 djangorestframework>=3.18.3
+pypdf>=6.21.2,<7

@@ -17,3 +17,6 @@ htmlcov/
 core/management/commands/create_admin_from_env.py
 
 .local/
+
+private_documents/
+.ruff_cache/
