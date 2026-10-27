@@ -8,6 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from .env import env, env_bool
+from .document_storage import private_document_storage
 
 # settings/base.py -> settings -> payroll_project -> project root
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -172,6 +173,5 @@ PRIVATE_DOCUMENT_ROOT = env("DJANGO_PRIVATE_DOCUMENT_ROOT", "").strip() or str(B
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
-    "private_documents": {"BACKEND": "django.core.files.storage.FileSystemStorage",
-                          "OPTIONS": {"location": PRIVATE_DOCUMENT_ROOT, "base_url": None}},
+    "private_documents": private_document_storage(BASE_DIR),
 }

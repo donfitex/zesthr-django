@@ -155,7 +155,7 @@ if SECURE_HSTS_PRELOAD and not (SECURE_HSTS_INCLUDE_SUBDOMAINS and SECURE_HSTS_S
 
 # Enable uploads only after a private durable storage location has been supplied.
 DOCUMENT_UPLOADS_ENABLED = env_bool("DJANGO_DOCUMENT_UPLOADS_ENABLED", False)
-if DOCUMENT_UPLOADS_ENABLED:
+if DOCUMENT_UPLOADS_ENABLED and env("DJANGO_DOCUMENT_STORAGE", "filesystem").lower() == "filesystem":
     _private_root = Path(require_env("DJANGO_PRIVATE_DOCUMENT_ROOT"))
     if not _private_root.is_absolute() or _private_root.resolve().is_relative_to(Path(STATIC_ROOT).resolve()):
         raise ImproperlyConfigured("Private document storage must be an absolute path outside static assets.")

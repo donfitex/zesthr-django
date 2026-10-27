@@ -10,3 +10,5 @@ gunicorn>=22.0
 django_filter>=26.2
 djangorestframework>=3.18.3
 pypdf>=6.21.2,<7
+
+django-storages[s3]>=1.14.6,<2
