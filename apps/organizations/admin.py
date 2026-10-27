@@ -16,3 +16,23 @@ class OrganizationReferenceAdmin(TenantAdmin):
     list_display = ("name", "code", "is_active")
     search_fields = ("name", "code")
     list_filter = ("is_active",)
+
+
+from .models import OrganizationMembership
+
+
+@admin.register(OrganizationMembership)
+class OrganizationMembershipAdmin(TenantAdmin):
+    list_display = ("user", "organization", "is_active")
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser

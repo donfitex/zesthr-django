@@ -147,7 +147,31 @@ class HROSUserAdmin(UserAdmin):
 
     actions = ["require_password_change", "deactivate_accounts", "activate_accounts"]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        # Account operators cannot reset or impersonate privileged users.
+        return queryset.filter(is_superuser=False, is_staff=False, user_permissions__isnull=True).exclude(
+            groups__permissions__isnull=False).distinct()
+
+    def get_readonly_fields(self, request, obj=None):
+        fields = list(super().get_readonly_fields(request, obj))
+        if not request.user.is_superuser:
+            fields += ["is_superuser", "is_staff", "groups", "user_permissions"]
+        return fields
+
+    def has_delete_permission(self, request, obj=None):
+        return False  # deactivate accounts to preserve attributable history
+
+
     def save_model(self, request, obj, form, change):
+        if not request.user.is_superuser:
+            from django.core.exceptions import PermissionDenied
+            if obj.is_superuser or obj.is_staff:
+                raise PermissionDenied("Only platform administrators may grant privileged access.")
+            if change and not self.get_queryset(request).filter(pk=obj.pk).exists():
+                raise PermissionDenied
         super().save_model(request, obj, form, change)
         if not change:
             accounts.require_password_change(obj, by=request.user)
