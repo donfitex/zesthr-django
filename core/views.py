@@ -834,8 +834,12 @@ def holidays_list(request):
 @login_required
 def leaves_list(request):
     today = timezone.localdate()
-    can_manage = request.user.has_perm(roles.VIEW_ALL_LEAVES)
     emp_profile = get_employee_profile(request.user)
+    is_manager = bool(emp_profile and emp_profile.is_active and
+                      Employee.objects.filter(manager=emp_profile, is_active=True).exists())
+    can_manage = request.user.has_perm(roles.VIEW_ALL_LEAVES) or is_manager
+    if request.GET.get("mine") == "1" and emp_profile:
+        can_manage = False
 
     if not can_manage and not emp_profile:
         raise PermissionDenied
@@ -845,7 +849,7 @@ def leaves_list(request):
         sick_used = emp_profile.sick_leaves_used_this_month(today.month, today.year)
         sick_rem = emp_profile.sick_leaves_remaining(today.month, today.year)
         return render(request, "leaves_list.html", {
-            "leaves": leaves,
+            "leaves": Paginator(leaves, 50).get_page(request.GET.get("page")),
             "is_staff": False,
             "sick_used": sick_used,
             "sick_rem": sick_rem,
@@ -855,11 +859,18 @@ def leaves_list(request):
 
     status_filter = request.GET.get("status")
     qs = scope_queryset(LeaveApplication.objects.select_related("emp"), request.user, "emp__organization").order_by("-applied_on")
-    if status_filter in ("PENDING", "APPROVED", "REJECTED"):
+    if not request.user.has_perm(roles.VIEW_ALL_LEAVES):
+        qs = leave_service.reviewable_leaves(request.user)
+    pending_count = qs.filter(status="PENDING").count()
+    if status_filter in dict(LeaveApplication.STATUS):
         qs = qs.filter(status=status_filter)
-    pending_count = scope_queryset(LeaveApplication.objects.filter(status="PENDING"), request.user, "emp__organization").count()
+    page = Paginator(qs, 50).get_page(request.GET.get("page"))
+    review_ids = set(leave_service.reviewable_leaves(request.user).filter(
+        pk__in=[item.pk for item in page]).values_list("pk", flat=True))
+    for item in page:
+        item.can_review = item.pk in review_ids
     return render(request, "leaves_list.html", {
-        "leaves": qs,
+        "leaves": page,
         "is_staff": True,
         "pending_count": pending_count,
         "selected_status": status_filter or "ALL",
@@ -898,10 +909,14 @@ def leave_apply(request):
     })
 
 
-@permission_required(roles.APPROVE_LEAVE)
+@login_required
 def leave_action(request, pk):
 
-    leave = get_object_or_404(scope_queryset(LeaveApplication.objects.select_related("emp"), request.user, "emp__organization"), pk=pk)
+    profile = get_employee_profile(request.user)
+    if not (request.user.has_perm(roles.APPROVE_LEAVE) or
+            (profile and profile.is_active and Employee.objects.filter(manager=profile).exists())):
+        raise PermissionDenied
+    leave = get_object_or_404(leave_service.reviewable_leaves(request.user), pk=pk)
     if request.method == "POST":
         action = request.POST.get("action")
         note = request.POST.get("admin_note", "").strip()

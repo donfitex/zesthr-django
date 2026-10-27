@@ -98,6 +98,7 @@
     <button class="icon" id="menu" aria-label="Toggle menu">☰</button>
     <span class="clock" id="clock"></span>
     <span class="spacer"></span>
+    <a href="{% url 'notifications' %}">Notifications{% if unread_notifications %} ({{ unread_notifications }}){% endif %}</a>
     <button class="icon" id="theme" aria-label="Switch light or dark theme">◐</button>
     <span class="who">
       {% if user.employee_profile %}

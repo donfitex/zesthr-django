@@ -53,6 +53,8 @@ def scan(start, end, *, user=None, late_threshold=3, max_shift_hours=16):
     queryset = Attendance.objects.filter(emp__in=people, date__range=(start, end)).select_related(
         "emp__work_schedule", "emp__department__work_schedule", "emp__work_location")
     resolver, late, count = ScheduleResolver(), defaultdict(list), 0
+    from django.utils import timezone
+    scan_started = timezone.now()
     employees = {}
     for item in queryset.iterator(chunk_size=500):
         employee = item.emp
@@ -78,4 +80,12 @@ def scan(start, end, *, user=None, late_threshold=3, max_shift_hours=16):
     for request in requests.iterator(chunk_size=500):
         count += record(request.emp, request.date, "BRIEF_EXPLANATION",
                         {"correction_request_id": request.pk, "reason": request.reason}, source=f"request:{request.pk}")[1]
+    from django.db.models import Count
+    from apps.organizations.models import Organization
+    from .notifications import notify_attendance_reviewers
+    summaries = AttendanceAnomaly.objects.filter(detected_at__gte=scan_started).values(
+        "employee__organization_id").annotate(total=Count("pk"))
+    for summary in summaries:
+        organization = Organization.objects.get(pk=summary["employee__organization_id"])
+        notify_attendance_reviewers(organization, count=summary["total"], day=end)
     return count

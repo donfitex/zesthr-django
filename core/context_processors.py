@@ -20,3 +20,10 @@ def review_flags(request):
         return {"pending_corrections": None}
     pending = corrections.reviewable_requests(user).filter(status=AttendanceCorrectionRequest.PENDING).count()
     return {"is_correction_reviewer": True, "pending_corrections": pending}
+
+
+def notification_flags(request):
+    from .models import Notification
+    if not request.user.is_authenticated:
+        return {}
+    return {"unread_notifications": Notification.objects.filter(recipient=request.user, read=False).count()}

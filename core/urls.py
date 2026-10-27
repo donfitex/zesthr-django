@@ -1,3 +1,4 @@
+from . import views_notifications
 from . import views_anomalies
 from . import views_documents
 from . import views_payroll
@@ -11,6 +12,10 @@ from . import views as v
 from . import views_auth as a
 
 urlpatterns = [
+    path("notifications/", views_notifications.inbox, name="notifications"),
+    path("notifications/read-all/", views_notifications.mark_all_read, name="notifications_read_all"),
+    path("notifications/<int:pk>/read/", views_notifications.mark_read, name="notification_read"),
+    path("leaves/<int:pk>/cancel/", views_leave.cancel_pending, name="leave_cancel_pending"),
     path("attendance/reviews/", views_anomalies.queue, name="anomaly_queue"),
     path("attendance/reviews/<int:pk>/", views_anomalies.review, name="anomaly_review"),
     path("employees/<int:pk>/documents/", views_documents.document_list, name="employee_documents"),

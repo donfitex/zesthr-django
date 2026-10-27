@@ -60,3 +60,19 @@ def notify_pending_leave(leave):
         url="/leaves/",
         unique_key=f"leave-pending:{leave.pk}",
     )
+
+def notify_attendance_reviewers(organization, *, count, day):
+    from django.contrib.auth.models import User
+    from django.db.models import Q
+    from apps.organizations.models import Organization
+    people = User.objects.filter(is_active=True).filter(
+        Q(is_superuser=True) | Q(groups__permissions__codename="review_attendance_corrections")
+        | Q(user_permissions__codename="review_attendance_corrections"))
+    if Organization.objects.count() > 1:
+        people = people.filter(Q(is_superuser=True) | Q(
+            organization_memberships__organization=organization, organization_memberships__is_active=True))
+    for person in people.distinct():
+        notify(user=person, notification_type=Notification.ATTENDANCE_EXCEPTION,
+               title="Attendance exceptions need review",
+               message=f"{count} new attendance signal(s) were identified. Review the explanations before making a decision.",
+               url="/attendance/reviews/", unique_key=f"anomaly-summary:{organization.pk}:{day}")
