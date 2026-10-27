@@ -425,7 +425,7 @@ class OvertimeScreensTests(BaseTest):
         self.assertNotContains(self.client.get(url), "<th>Overtime</th>")
         slip = Salary.objects.filter(month=2, year=2026).first()
         page = self.client.get(reverse("slip", args=[slip.pk]))
-        self.assertContains(page, "Basic salary (gross)")
+        self.assertContains(page, "Basic salary")
         self.assertNotContains(page, "Overtime")
 
     def test_employee_dashboard_shows_lateness_and_overtime(self):

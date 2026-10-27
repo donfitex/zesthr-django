@@ -19,6 +19,10 @@ def default_organization():
     return organization
 
 
+def default_organization_id():
+    return default_organization().pk
+
+
 class Department(models.Model):
     organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True, blank=True,
                                      related_name="departments")
@@ -394,6 +398,7 @@ class Salary(models.Model):
     overtime_minutes = models.PositiveIntegerField(default=0)
     overtime_pay = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     net = models.DecimalField(max_digits=10, decimal_places=2)
+    calculation_snapshot = models.JSONField(default=dict, blank=True)
     generated_on = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -412,6 +417,13 @@ class Salary(models.Model):
             models.CheckConstraint(condition=models.Q(net__gte=0), name="salary_net_non_negative"),
             models.CheckConstraint(condition=models.Q(overtime_pay__gte=0), name="salary_overtime_non_negative"),
         ]
+
+    def save(self, *args, **kwargs):
+        if PayrollRun.objects.filter(organization_id=self.emp.organization_id, month=self.month, year=self.year,
+                                    status__in=["FINALIZED", "REVERSED"]).exists():
+            raise ValidationError("Finalized payroll is immutable. Use an approved adjustment in a later period.")
+        super().save(*args, **kwargs)
+
 
 
 class Holiday(models.Model):
@@ -679,6 +691,7 @@ class PayrollComponent(models.Model):
     - Loan Deduction
     """
 
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, default=default_organization_id)
     EARNING = "EARNING"
     DEDUCTION = "DEDUCTION"
 
@@ -689,12 +702,10 @@ class PayrollComponent(models.Model):
 
     name = models.CharField(
         max_length=100,
-        unique=True,
     )
 
     code = models.CharField(
         max_length=30,
-        unique=True,
     )
 
     component_type = models.CharField(
@@ -717,6 +728,8 @@ class PayrollComponent(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [models.UniqueConstraint(fields=["organization", "code"], name="pay_component_org_code_unique"),
+                       models.UniqueConstraint(fields=["organization", "name"], name="pay_component_org_name_unique")]
 
     def __str__(self):
         return f"{self.name} ({self.code})"
@@ -756,6 +769,8 @@ class EmployeePayrollComponent(models.Model):
     )
 
     class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gte=0), name="pay_assignment_nonnegative"),
+                       models.CheckConstraint(condition=models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=models.F("effective_from")), name="pay_assignment_dates_valid")]
         ordering = [
             "employee",
             "component",
@@ -774,12 +789,14 @@ class EmployeePayrollComponent(models.Model):
 
     def clean(self):
         errors = {}
+        if self.employee_id and self.component_id and self.employee.organization_id != self.component.organization_id:
+            errors["component"] = "Choose a component in the employee organization."
 
-        if self.amount < 0:
+        if self.amount is not None and self.amount < 0:
             errors["amount"] = "Amount cannot be negative."
 
         if (
-            self.effective_to
+            self.effective_to and self.effective_from
             and self.effective_to < self.effective_from
         ):
             errors["effective_to"] = (
@@ -843,6 +860,8 @@ class PayrollAdjustment(models.Model):
     )
 
     class Meta:
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gte=0), name="pay_adjustment_nonnegative"),
+                       models.CheckConstraint(condition=models.Q(month__gte=1, month__lte=12, year__gte=2000, year__lte=2100), name="pay_adjustment_period_valid")]
         indexes = [
             models.Index(
                 fields=[
@@ -855,12 +874,12 @@ class PayrollAdjustment(models.Model):
         ]
 
     def clean(self):
-        if self.amount < 0:
+        if self.amount is not None and self.amount < 0:
             raise ValidationError(
                 {"amount": "Adjustment cannot be negative."}
             )
 
-        if not 1 <= self.month <= 12:
+        if self.month is not None and not 1 <= self.month <= 12:
             raise ValidationError(
                 {"month": "Invalid payroll month."}
             )
@@ -874,6 +893,8 @@ class PayrollAdjustment(models.Model):
         
         
 class PayrollRun(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, default=default_organization_id)
+    calculation_snapshot = models.JSONField(default=list, blank=True)
     DRAFT = "DRAFT"
     PENDING_APPROVAL = "PENDING_APPROVAL"
     APPROVED = "APPROVED"
@@ -941,10 +962,12 @@ class PayrollRun(models.Model):
     )
 
     class Meta:
+        permissions = [("approve_payroll", "Can approve payroll"), ("finalize_payroll", "Can finalize payroll"),
+                       ("reverse_payroll", "Can reverse payroll")]
         constraints = [
             models.UniqueConstraint(
-                fields=["month", "year"],
-                name="unique_payroll_period",
+                fields=["organization", "month", "year"],
+                name="unique_organization_payroll_period",
             ),
         ]
 
@@ -1166,3 +1189,14 @@ class LeaveBalanceAdjustment(AppendOnlyModel):
         super().clean()
         if not self.reason.strip():
             raise ValidationError({"reason": "Explain the balance adjustment."})
+
+
+class PayrollEvent(AppendOnlyModel):
+    run = models.ForeignKey(PayrollRun, on_delete=models.PROTECT, related_name="events")
+    action = models.CharField(max_length=30)
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    reason = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-pk"]

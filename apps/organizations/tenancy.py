@@ -42,6 +42,8 @@ def scope_model_queryset(queryset, user):
         "attendance": "emp__organization", "attendanceaudit": "emp__organization",
         "leaveentitlement": "employee__organization",
         "leavebalanceadjustment": "entitlement__employee__organization",
+        "payrollcomponent": "organization", "employeepayrollcomponent": "employee__organization",
+        "payrolladjustment": "employee__organization", "payrollrun": "organization", "payrollevent": "run__organization",
         "salary": "emp__organization", "leaveapplication": "emp__organization",
     }
     path = paths.get(queryset.model._meta.model_name)

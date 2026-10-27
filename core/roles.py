@@ -153,3 +153,9 @@ for _role in (SUPER_ADMIN, HR_ADMIN, HR_MANAGER):
         "core.view_leaveentitlement", "core.add_leaveentitlement", "core.change_leaveentitlement",
         "core.view_leavebalanceadjustment", "core.add_leavebalanceadjustment",
     ]
+
+
+for _role in (SUPER_ADMIN, HR_ADMIN):
+    ROLE_PERMISSIONS[_role] += ["core.approve_payroll", "core.finalize_payroll", "core.reverse_payroll"]
+ROLE_PERMISSIONS[PAYROLL_OFFICER] += ["core.finalize_payroll"]
+ROLE_PERMISSIONS[FINANCE_OFFICER] += ["core.approve_payroll"]

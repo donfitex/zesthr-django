@@ -46,7 +46,7 @@ def period(request):
     today = timezone.localdate()
     try:
         month, year = int(request.GET.get("month", today.month)), int(request.GET.get("year", today.year))
-        if not 1 <= month <= 12:
+        if not 1 <= month <= 12 or not 2000 <= year <= 2100:
             raise ValueError
     except ValueError:
         month, year = today.month, today.year
@@ -781,8 +781,12 @@ def payroll(request):
     p = period(request)
     if request.method == "POST":
         require_perm(request.user, roles.GENERATE_PAYROLL)
-        payroll_service.generate_payroll(p["month"], p["year"], user=request.user)
-        messages.success(request, "Payroll generated.")
+        try:
+            payroll_service.generate_payroll(p["month"], p["year"], user=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+        else:
+            messages.success(request, "Draft payroll generated. Review and finalize it in Payroll runs.")
         return redirect(f"{request.path}?month={p['month']}&year={p['year']}")
     slips = scope_queryset(Salary.objects.select_related("emp"), request.user, "emp__organization").filter(month=p["month"], year=p["year"])
     p.update(slips=slips, total=slips.aggregate(t=Sum("net"))["t"] or 0,
@@ -802,7 +806,9 @@ def slip(request, pk):
     s = get_object_or_404(slips, pk=pk)
     counts = payroll_service.attendance_totals(s)
     return render(request, "slip.html", {"s": s, "c": counts, "month_name": calendar.month_name[s.month],
-                                         "basic": s.gross - s.overtime_pay,
+                                         "basic": s.calculation_snapshot.get("basic", s.gross - s.overtime_pay),
+                                         "components": s.calculation_snapshot.get("components", []),
+                                         "currency": s.calculation_snapshot.get("currency", s.emp.organization.default_currency),
                                          "overtime_text": schedules_service.minutes_text(s.overtime_minutes)})
 
 
@@ -930,14 +936,10 @@ def attendance_report_csv(request):
     )
 
     if not start or not end:
-        raise ValidationError(
-            "Both from and to dates are required."
-        )
+        return HttpResponse("Both from and to dates are required.", status=400)
 
-    if end < start:
-        raise ValidationError(
-            "End date cannot be before start date."
-        )
+    if end < start or (end - start).days > 365:
+        return HttpResponse("Choose an ordered date range of at most 366 days.", status=400)
 
     rows = reports_service.attendance_report(
         start,
@@ -966,15 +968,14 @@ def attendance_report_csv(request):
         ]
     )
 
-    for row in rows:
+    from .services.csv_export import safe_cell
+    for row in rows.iterator(chunk_size=500):
         writer.writerow(
             [
                 row.date,
-                row.emp.employee_number,
-                row.emp.name,
-                row.emp.department.name
-                if row.emp.department
-                else "",
+                safe_cell(row.emp.employee_number),
+                safe_cell(row.emp.name),
+                safe_cell(row.emp.department.name if row.emp.department else ""),
                 row.get_status_display(),
                 row.check_in or "",
                 row.check_out or "",

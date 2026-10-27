@@ -244,3 +244,44 @@ class LeaveBalanceAdjustmentAdmin(TenantAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+from .models import PayrollComponent, EmployeePayrollComponent, PayrollAdjustment, PayrollRun, PayrollEvent
+
+
+@admin.register(PayrollComponent, EmployeePayrollComponent, PayrollAdjustment)
+class PayrollConfigurationAdmin(TenantAdmin):
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm(roles.VIEW_EMPLOYEE_PAY)
+
+    def has_add_permission(self, request):
+        return request.user.has_perm(roles.CHANGE_EMPLOYEE_PAY)
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.has_perm(roles.CHANGE_EMPLOYEE_PAY)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        if isinstance(obj, PayrollAdjustment) and not change:
+            obj.created_by = request.user
+        obj.save()
+
+    def get_readonly_fields(self, request, obj=None):
+        return ("created_by", "created_at") if self.model is PayrollAdjustment else ()
+
+
+@admin.register(PayrollRun, PayrollEvent)
+class PayrollHistoryAdmin(TenantAdmin):
+    def has_view_permission(self, request, obj=None):
+        return request.user.has_perm(roles.VIEW_PAYROLL_REPORT)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

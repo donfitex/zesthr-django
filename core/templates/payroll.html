@@ -3,6 +3,7 @@
 {% block content %}
 <div class="head"><h1>Salary register: {{ month_name }} {{ year }}</h1>
   {% if perms.core.generate_payroll %}<form method="post">{% csrf_token %}<button class="btn">{% if slips %}Recalculate payroll{% else %}Generate payroll{% endif %}</button></form>{% endif %}</div>
+<p><a class="btn ghost" href="{% url 'payroll_runs' %}">Review and finalize payroll runs</a> <a class="btn ghost" href="{% url 'payroll_csv' %}?month={{ month }}&year={{ year }}">Export CSV</a></p>
 {% include "partials/period.html" %}
 <section class="card"><div class="scroll"><table>
   <tr><th>Employee</th><th>Gross</th><th>Absent days</th><th>Deduction</th>{% if any_overtime %}<th>Overtime</th>{% endif %}<th>Net</th><th></th></tr>

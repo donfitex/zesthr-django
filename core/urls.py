@@ -1,3 +1,4 @@
+from . import views_payroll
 from . import views_leave
 from django.contrib.auth import views as auth
 from django.contrib.auth.decorators import login_required
@@ -8,6 +9,9 @@ from . import views as v
 from . import views_auth as a
 
 urlpatterns = [
+    path("payroll/runs/", views_payroll.runs, name="payroll_runs"),
+    path("payroll/runs/<int:pk>/", views_payroll.run_detail, name="payroll_run_detail"),
+    path("payroll/export.csv", views_payroll.payroll_csv, name="payroll_csv"),
     path("leaves/balances/", views_leave.balances, name="leave_balances"),
     path("employees/<int:pk>/leave-balances/", views_leave.balances, name="employee_leave_balances"),
     path("login/", a.LoginView.as_view(), name="login"),
