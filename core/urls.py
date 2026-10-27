@@ -1,3 +1,4 @@
+from . import views_compliance
 from . import views_notifications
 from . import views_anomalies
 from . import views_documents
@@ -12,6 +13,7 @@ from . import views as v
 from . import views_auth as a
 
 urlpatterns = [
+    path("reports/audit/", views_compliance.report, name="compliance_report"),
     path("notifications/", views_notifications.inbox, name="notifications"),
     path("notifications/read-all/", views_notifications.mark_all_read, name="notifications_read_all"),
     path("notifications/<int:pk>/read/", views_notifications.mark_read, name="notification_read"),

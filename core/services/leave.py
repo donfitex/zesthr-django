@@ -101,7 +101,7 @@ def approve_leave(leave, note="", *, by=None):
     day = leave.start_date
     while day <= leave.end_date:
         attendance_service.save_manual(leave.emp, day, status="L", by=by,
-                                       reason=f"Leave #{leave.pk} approved: {note}".strip())
+                                       reason=f"Approved leave request #{leave.pk}")
         day += timedelta(days=1)
     leave.status, leave.admin_note = "APPROVED", note.strip()[:255]
     leave.save(update_fields=["status", "admin_note"])

@@ -36,6 +36,7 @@
     </div>
   </a>
   <nav>
+    {% if perms.core.view_attendance_audit %}<a href="{% url 'compliance_report' %}">Audit activity</a>{% endif %}
     <a class="{% if n == 'home' %}on{% endif %}" href="{% url 'home' %}">Overview (Home)</a>
     <a class="{% if n == 'dashboard' %}on{% endif %}" href="{% url 'dashboard' %}">
       {% if perms.core.view_all_attendance %}Dashboard{% else %}My Dashboard{% endif %}
