@@ -344,3 +344,8 @@ label{display:block;font-weight:500;margin-bottom:.9rem;font-size:.92rem}label s
 @media (max-width:560px){.notice{flex-direction:column;align-items:flex-start;gap:.3rem}.head .actions{width:100%}}
 .kinds{border:1px solid var(--line);border-radius:8px;padding:.3rem .7rem;display:flex;gap:.8rem;flex-wrap:wrap;align-items:center}.kinds legend{font-size:.8rem;color:var(--mut);padding:0 .3rem}.kinds label{display:flex;gap:.3rem;align-items:center}
 .bulk-panel{position:sticky;bottom:.5rem}.bulk-panel h2{margin:.1rem 0 .6rem;font-size:1rem}form.inline{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center}form.inline input{max-width:210px}
+
+/* Keyboard access to the main workflow without traversing every navigation link. */
+.skip-link{position:fixed;top:8px;left:8px;transform:translateY(-160%);z-index:2000;background:var(--navy,#102238);color:#fff;padding:12px 18px;border-radius:6px}
+.skip-link:focus{transform:translateY(0);outline:3px solid var(--teal,#0d9488);outline-offset:3px}
+button:focus-visible,summary:focus-visible,textarea:focus-visible{outline:2px solid var(--teal);outline-offset:3px}
