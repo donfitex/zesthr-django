@@ -132,22 +132,22 @@
         <div class="mockup-kpis">
           <div class="mock-kpi-card">
             <span class="mock-label">Active Employees</span>
-            <div class="mock-val">{{ total_employees|default:"5" }}</div>
+            <div class="mock-val">{{ total_employees|default_if_none:"5" }}</div>
             <span class="mock-sub">All departments</span>
           </div>
           <div class="mock-kpi-card ok">
             <span class="mock-label">Present Today</span>
-            <div class="mock-val">{{ present_count|default:"4" }}</div>
+            <div class="mock-val">{{ present_count|default_if_none:"4" }}</div>
             <span class="mock-sub">Verified check-ins</span>
           </div>
           <div class="mock-kpi-card bad">
             <span class="mock-label">Absent / Leave</span>
-            <div class="mock-val">{{ absent_count|default:"1" }}</div>
+            <div class="mock-val">{{ absent_count|default_if_none:"1" }}</div>
             <span class="mock-sub">Loss of pay tracked</span>
           </div>
           <div class="mock-kpi-card navy">
-            <span class="mock-label">{{ month_name }} Net Payroll</span>
-            <div class="mock-val">₹{{ payroll_total|floatformat:0|default:"2,45,000" }}</div>
+            <span class="mock-label">{% if not perms.core.view_payroll_report %}Sample {% endif %}{{ month_name }} Net Payroll</span>
+            <div class="mock-val">₹{{ payroll_total|floatformat:0|default_if_none:"2,45,000" }}</div>
             <span class="mock-sub">Auto-computed</span>
           </div>
         </div>
@@ -180,6 +180,8 @@
                         <td><span class="tag {{ rec.status }}">{{ rec.get_status_display }}</span></td>
                       </tr>
                     {% endfor %}
+                  {% elif perms.core.view_all_attendance %}
+                    <tr><td colspan="4">No attendance records today.</td></tr>
                   {% else %}
                     <tr>
                       <td><b>Asha Verma</b></td>
@@ -264,7 +266,7 @@
   <div class="home-container">
     <div class="ribbon-grid">
       <div class="ribbon-item">
-        <div class="ribbon-num">{{ total_employees|default:"5+" }}</div>
+        <div class="ribbon-num">{{ total_employees|default_if_none:"5+" }}</div>
         <div class="ribbon-label">Employees Managed</div>
       </div>
       <div class="ribbon-item">

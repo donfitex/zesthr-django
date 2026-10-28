@@ -95,6 +95,14 @@ class AnonymousAccessTests(BaseTest):
         html = self.client.get(reverse("home")).content.decode()
         self.assertNotIn("Alice", html)
 
+    def test_authorized_home_preserves_zero_counts_and_empty_feed(self):
+        self.login(self.hr_admin)
+        response = self.client.get(reverse("home"))
+        self.assertEqual(response.context["present_count"], 0)
+        self.assertContains(response, "No attendance records today.")
+        self.assertNotContains(response, "Asha Verma")
+        self.assertRegex(response.content.decode(), r'Present Today</span>\s*<div class="mock-val">0</div>')
+
     def test_home_page_shows_live_data_to_authorized_staff(self):
         Attendance.objects.create(emp=self.alice, date=timezone.localdate())
         self.login(self.hr_admin)

@@ -61,7 +61,8 @@ def home(request):
     """Public landing page. Live company data is shown only to authorized users;
     everyone else sees the template's sample figures."""
     today = timezone.localdate()
-    ctx = {"today": today, "month_name": calendar.month_name[today.month], "year": today.year}
+    ctx = {"today": today, "month_name": calendar.month_name[today.month], "year": today.year,
+           "total_employees": 5, "present_count": 4, "absent_count": 1, "payroll_total": 245000}
     if request.user.has_perm(roles.VIEW_ALL_ATTENDANCE):
         snap = selectors.company_snapshot(today, recent_limit=5, user=request.user)
         ctx.update(total_employees=snap["total"], present_count=snap["present"],
