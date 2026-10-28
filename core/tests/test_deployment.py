@@ -31,8 +31,9 @@ class DeploymentFilesTests(SimpleTestCase):
 
     def test_render_blueprint_uses_real_wsgi_and_migrations(self):
         blueprint = self.read("render.yaml")
-        self.assertIn("gunicorn payroll_project.wsgi:application", blueprint)
-        self.assertIn("python manage.py migrate --noinput", blueprint)
+        self.assertIn("python scripts/start_server.py", blueprint)
+        self.assertIn("healthCheckPath: /healthz/", blueprint)
+        self.assertIn("prepare_deployment", self.read("scripts/start_server.py"))
 
     def test_wsgi_entrypoint_matches_what_vercel_reads_from_settings(self):
         self.assertEqual(settings.WSGI_APPLICATION, "payroll_project.wsgi.application")

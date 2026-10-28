@@ -3,21 +3,17 @@ services:
     name: zesthr-django
     runtime: python
     plan: free
+    healthCheckPath: /healthz/
+    autoDeployTrigger: checksPass
 
     buildCommand: |
       pip install -r requirements.txt
       python manage.py collectstatic --noinput
 
-    preDeployCommand: |
-      python manage.py migrate --noinput
-
     startCommand: |
-      gunicorn payroll_project.wsgi:application
+      python scripts/start_server.py
 
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.13.0
-
       - key: DJANGO_SETTINGS_MODULE
         value: payroll_project.settings.production
 

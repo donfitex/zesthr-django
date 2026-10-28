@@ -69,7 +69,8 @@ class PrivateDocumentTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response["Content-Disposition"].startswith("attachment;"))
         self.assertEqual(response["Cache-Control"], "private, no-store")
-        response.close()
+        content = b"".join(response.streaming_content)
+        self.assertTrue(content.startswith(b"%PDF-"))
         self.assertTrue(shared.events.filter(action="DOWNLOADED", actor=self.user).exists())
 
     def test_cross_employee_download_is_rejected(self):

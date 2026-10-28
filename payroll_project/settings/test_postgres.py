@@ -15,5 +15,6 @@ DATABASES = {
         "PASSWORD": env("TEST_DB_PASSWORD", "hros"),
         "HOST": env("TEST_DB_HOST", "127.0.0.1"),
         "PORT": env("TEST_DB_PORT", "5432"),
+        "OPTIONS": {"connect_timeout": 10},
     }
 }

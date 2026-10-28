@@ -189,3 +189,19 @@ attendance.check_in(amy, now=time(9), today=date(2026, 1, 6), by=u)
         self.assertIn("not found", r.stderr)
         r = self.copy(source=self.target)
         self.assertIn("same database", r.stderr)
+
+
+    def test_backup_preserves_employee_links_and_money(self):
+        import hashlib
+        import json
+        folder = self.dir / "backups"
+        result = self.manage(self.source, "backup_database", "--directory", str(folder))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        backup, = folder.glob("*.sqlite3")
+        manifest = json.loads(backup.with_suffix(".sqlite3.json").read_text())
+        self.assertEqual(manifest["sha256"], hashlib.sha256(backup.read_bytes()).hexdigest())
+        from contextlib import closing
+        with closing(sqlite3.connect(backup)) as restored:
+            self.assertEqual(restored.execute("SELECT COUNT(*) FROM employee").fetchone()[0], 2)
+            self.assertEqual(str(restored.execute("SELECT net FROM salary").fetchone()[0]), "2900.1")
+            self.assertEqual(restored.execute("PRAGMA integrity_check").fetchone()[0], "ok")

@@ -18,12 +18,27 @@ def review_flags(request):
     is_manager = profile is not None and Employee.objects.filter(manager=profile, is_active=True).exists()
     if not (is_hr or is_manager):
         return {"pending_corrections": None}
-    pending = corrections.reviewable_requests(user).filter(status=AttendanceCorrectionRequest.PENDING).count()
-    return {"is_correction_reviewer": True, "pending_corrections": pending}
+    from django.contrib.auth import get_user_model
+    from django.db.models import Count, Subquery
+    from django.db.models.functions import Coalesce
+    from .models import Notification
+    waiting = corrections.reviewable_requests(user).filter(
+        status=AttendanceCorrectionRequest.PENDING).order_by().values("status").annotate(
+            total=Count("pk")).values("total")
+    unread = Notification.objects.filter(recipient=user, read=False).order_by().values(
+        "recipient_id").annotate(total=Count("pk")).values("total")
+    counts = get_user_model().objects.filter(pk=user.pk).annotate(
+        pending_count=Coalesce(Subquery(waiting[:1]), 0),
+        unread_count=Coalesce(Subquery(unread[:1]), 0)).values("pending_count", "unread_count").get()
+    request._hros_unread_notifications = counts["unread_count"]
+    return {"is_correction_reviewer": True, "pending_corrections": counts["pending_count"]}
 
 
 def notification_flags(request):
     from .models import Notification
     if not request.user.is_authenticated:
         return {}
-    return {"unread_notifications": Notification.objects.filter(recipient=request.user, read=False).count()}
+    count = getattr(request, "_hros_unread_notifications", None)
+    if count is None:
+        count = Notification.objects.filter(recipient=request.user, read=False).count()
+    return {"unread_notifications": count}

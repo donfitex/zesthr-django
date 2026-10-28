@@ -540,6 +540,10 @@ def healthz(request):
         with connection.cursor() as cursor:
             cursor.execute("SELECT 1")
             cursor.fetchone()
+        from django.db.migrations.executor import MigrationExecutor
+        executor = MigrationExecutor(connection)
+        if executor.migration_plan(executor.loader.graph.leaf_nodes()):
+            return JsonResponse({"status": "unavailable"}, status=503, headers={"Cache-Control": "no-store"})
         response = JsonResponse({"status": "ok"})
     except Exception:
         response = JsonResponse({"status": "unavailable"}, status=503)

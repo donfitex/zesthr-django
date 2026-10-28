@@ -20,3 +20,10 @@ core/management/commands/create_admin_from_env.py
 
 private_documents/
 .ruff_cache/
+
+coverage.xml
+backups/
+*.tfstate
+*.tfstate.*
+.terraform/
+*.tfvars
