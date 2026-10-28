@@ -53,6 +53,15 @@ jobs:
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python -m coverage run --source=core,apps manage.py test
+      - name: Verify PostgreSQL backup recovery with isolated fixture data
+        if: matrix.database == 'postgres'
+        run: |
+          python manage.py migrate --noinput
+          python manage.py shell -c "from core.tests.test_database import MigrateLegacyDataTests; exec(MigrateLegacyDataTests.POPULATE)"
+          docker exec '${{ job.services.postgres.id }}' pg_dump -U hros -d hros --format=custom --no-owner --no-acl > "$RUNNER_TEMP/hros-recovery.dump"
+          docker exec '${{ job.services.postgres.id }}' createdb -U hros hros_restore_verification
+          docker exec -i '${{ job.services.postgres.id }}' pg_restore -U hros --no-owner --no-acl --exit-on-error --dbname=hros_restore_verification < "$RUNNER_TEMP/hros-recovery.dump"
+          TEST_DB_NAME=hros_restore_verification python manage.py shell -c "from decimal import Decimal; from core.models import Employee, Salary, AttendanceAudit; a=Employee.objects.get(name='Amy'); assert a.user.username == 'amy'; assert a.manager.name == 'Boss'; assert a.basic_salary == Decimal('3000.25'); assert Salary.objects.get(emp=a).net == Decimal('2900.10'); assert AttendanceAudit.objects.get().changed_by.username == 'amy'; print('Employee links, financial precision and audit history survived recovery.')"
       - run: python -m coverage report --fail-under=75
       - run: python -m coverage xml
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
