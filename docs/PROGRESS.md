@@ -13,16 +13,20 @@ Last reviewed: 28 October 2026. This is an evidence record, not a declaration th
 - Notifications and reports: private notification inbox and manager leave queues (11921ae), scoped compliance reports with confidential-note controls (1b57dd2).
 - Privileged accounts: operator escalation and impersonation restrictions (347939e).
 
-## Operations phase under verification
+## Verified operations and release checks
 
-GitHub CI for SQLite/PostgreSQL, dependency audit, coverage threshold, production container, migration preparation and locking, schema-aware readiness, database backups with checksum manifests, and recovery documentation. Targeted regression suite passed 19 tests. Earlier complete SQLite run measured 90% coverage but revealed two regressions, now corrected and being rerun. Earlier PostgreSQL run also revealed a streaming-response test cleanup issue, corrected before rerun. The corrected full SQLite suite passed 519 tests, with five PostgreSQL-only concurrency tests skipped. Dependency audit: 59 packages, zero advisories. Lint and migration-drift checks passed. Local Docker became unresponsive during verification; the PostgreSQL rerun timed out connecting and a container build has not passed yet. CI includes independent PostgreSQL and container verification.
+- f01b8c4: GitHub CI on SQLite/PostgreSQL, dependency audit, coverage gate, production container, migration preparation/locking, schema-aware readiness, database backups with checksummed manifests, and recovery documentation.
+- Local SQLite: 519 tests passed; five PostgreSQL-only concurrency tests skipped. Targeted regressions: 19 passed. Dependency audit: 59 packages, zero advisories. Lint and migration drift passed.
+- GitHub run 40640173931: SQLite, PostgreSQL (including concurrency tests), dependencies, and container jobs passed. Container verification confirms non-root UID and migration startup. Local Docker failed; successful CI provides independent container/PostgreSQL evidence.
+- 5b761c4 / GitHub run 40640732203: all four jobs passed, including an isolated PostgreSQL dump/restore exercise verifying employee/account/manager links, exact salary amounts, and attendance-audit attribution.
+- Render deployed f01b8c4 successfully; public /healthz/ returned HTTP 200 with status ok and Cache-Control no-store. Existing Gunicorn startup uses the verified compatibility migration hook.
+- f86d7f0: remaining homepage technical copy removed; sample labels clarified; keyboard skip link, focus indicators, menu state, and Escape handling added. Fourteen existing dashboard/access tests passed. Follow-up zero-count/empty-feed accuracy fix passed four homepage/access tests.
 
 ## Remaining plan review
 
-- Complete full-suite and actual CI verification, container verification, and an isolated PostgreSQL restore exercise.
-- Verify existing production Render startup, health check, and deployment-after-CI settings in the confirmed My Workspace account.
-- Review onboarding experience, location-specific holiday integration, responsive/accessibility behavior, and remaining homepage technical/sample copy.
-- Reconcile documentation and final readiness evidence against master-plan phases 0-14, including API scope, measured performance, and deployment limitations.
+- Finish Render Dashboard settings: start command python scripts/start_server.py, health check /healthz/, and automatic deployment after CI checks pass. The live service still has its original command, blank health-check setting, and commit-triggered deployment. Desktop automation could not reliably capture the browser window; no Dashboard changes were submitted.
+- Complete visual mobile/desktop and keyboard review when reliable browser access is available. Account provisioning and employee linking provide the current onboarding path; a task-based onboarding wizard is not implemented. Per-location holiday integration remains conditional on confirmed multi-branch requirements.
+- Final production review still needs operator configuration validation, approved company policies, and realistic production-volume performance measurements. Existing query-budget tests and CI coverage do not establish production load capacity.
 - Provision and verify private durable document storage before enabling production uploads. Requires the owner's cloud account/region and secure credential setup.
 - Confirm and implement the production backup schedule, retention policy, and recovery objectives. Commands alone do not establish an operating backup service.
 

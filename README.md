@@ -1,58 +1,59 @@
-# HROS: Human Resources Operating System (Django)
+# HROS
 
-HROS is evolving from an attendance application into a secure, employee-centric
-Human Resources Management Platform. Today it provides daily attendance and
-monthly salary slips with automated loss-of-pay deductions.
-Stack: Python, Django, PostgreSQL in production (Supabase), SQLite for local development, HTML, CSS.
+HROS manages employee records, attendance, leave, reviewed payroll, private employee documents, notifications, and audit reporting. It runs as a Django modular monolith with PostgreSQL in production and SQLite for development.
 
-## Run it
-```bash
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python manage.py makemigrations core
+The current release has automated authorization, tenant-isolation, attendance, leave, payroll, migration, and storage tests. Production readiness still depends on verified deployment settings, private storage provisioning, recovery operations, and approved business policies. See [progress and remaining work](docs/PROGRESS.md).
+
+## Local setup
+
+Use Python 3.12. Create and activate a virtual environment, then run:
+
+```sh
+python -m pip install -r requirements/development.txt
+```
+
+Copy `.env.example` to `.env`, select development settings, and supply a local secret. Keep secrets out of Git. The development database is SQLite; production settings require PostgreSQL, explicit hosts, a strong secret, and email configuration.
+
+```sh
 python manage.py migrate
+python manage.py createsuperuser
 python manage.py runserver
 ```
-Open http://127.0.0.1:8000/ to explore the **HROS Home Page** and sign in.
 
-### Sample data (local development only)
+Open http://127.0.0.1:8000/. On Windows, activate with `.venv\Scripts\Activate.ps1`; on Unix, use `source .venv/bin/activate` after creating the environment with `python -m venv .venv`. Do not generate new migrations merely to initialize an existing checkout.
 
-The optional `seed_demo` command creates test accounts with known passwords. It is guarded by `DEBUG=True`; use it only in a disposable local development database, never in production. The command is not run automatically. Do not expose demo credentials or seed demo users into the production Supabase database.
+`seed_demo` is optional and restricted to debug development environments. Its known-password accounts belong only in disposable local databases. Existing production records must never be replaced by demo data.
 
-## Modules & Features
-- **Home**: Product landing page with HROS brand logo, feature highlights, live architecture preview, interactive payroll calculator, and credentials sandbox.
-- **Role-Based Portals**:
-  - **Employee Portal**: Dedicated self-service dashboard with real-time punch card (Check-In & Check-Out), 1-per-month sick leave quota balance meter, upcoming Indian holiday reminder, personal attendance history, and salary slips.
-  - **HR Admin Portal**: Company-wide stats, employee management, manual attendance marking, leave approval queue, and monthly payroll generation.
-- **Daily Attendance**: Self check-in / check-out with automatic timestamps; admin bulk management for Present (P), Absent (A), Half-Day (H), and Leave (L).
-- **Indian Government Holidays 🇮🇳**: Complete 2026 official calendar categorized into Gazetted (mandatory off) and Restricted / Optional holidays with contextual significance badges.
-- **Leave Management & 1 Sick Leave / Month Rule**:
-  - Apply Leave interface with form validation enforcing **strictly 1 Sick Leave per calendar month** (maximum 1 day duration per application, strictly non-cumulative).
-  - Also supports Casual Leave (CL) and Paid Leave (PL).
-  - Admin approval/rejection pipeline: Approved leaves automatically record Paid Leave (`L`) in daily attendance without salary penalty.
-- **Payroll & Deductions**: Loss-of-pay calculations, salary register generation, and printable individual salary slips.
-- Light/dark theme toggle, responsive mobile navigation, and print-ready stylesheet.
+## Core workflows
 
-## Product architecture
+- Provision login accounts in the restricted administration interface, link employees, and assign employment dates, departments, managers, and schedules. Provisioned accounts must change their initial password. Deactivation revokes the linked login and retains history.
+- Employees check in/out, request attendance corrections, apply for leave, read notifications, and access their own available payslips and documents.
+- Authorized managers review direct-report leave and correction requests. HR access is limited by explicit permissions and organization membership.
+- Payroll operators calculate and review snapshots. Independent approval precedes finalization. Finalized payroll is immutable; reversals and subsequent adjustments preserve history.
+- Attendance anomalies are reviewable exceptions. They do not establish misconduct or automatically impose penalties.
+- PDF documents use private storage, validated uploads, authorized downloads, audit events, and retention controls. Production uploads stay disabled until durable storage is configured.
 
-The platform roadmap, domain boundaries, security principles and incremental
-migration strategy are documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-The initial architectural decision is recorded in
-[ADR 0001](docs/adr/0001-modular-monolith-and-domain-ownership.md).
+## Verification
 
-## Salary formula
-`per_day_pay = basic / days in month`  
-`absent_days = absent + half-days / 2` (approved leave `L` is fully exempt from deduction)  
-`net = basic - (absent_days x per_day_pay)`  
+```sh
+python manage.py test
+python manage.py makemigrations --check --dry-run
+python -m pip_audit
+```
 
-## Deployment layout
+The default test command uses isolated test settings. GitHub Actions runs the full suite on SQLite and PostgreSQL, checks migration drift and selected lint errors, enforces coverage of at least 75%, audits dependencies, and builds/verifies the non-root container. PostgreSQL concurrency tests intentionally skip on SQLite. Use the isolated Compose service and settings described in [operations](docs/OPERATIONS.md) for local PostgreSQL verification.
 
-The repository root must contain `manage.py`, `requirements.txt`, `vercel.json`, `api/index.py`, and the `payroll_project/` and `core/` packages. In Vercel, set the project Root Directory to the directory containing `vercel.json` and `manage.py` (normally `.`). Push changes to the configured Git branch, then redeploy the new commit. If the deployment still serves old templates, inspect the deployment commit SHA and use **Redeploy without Build Cache**.
+## Documentation
 
-## Files
-- `core/models.py`: Employee, Attendance, Salary, Holiday, LeaveApplication
-- `core/forms.py`: Employee, Attendance, and LeaveApplicationForm with sick leave quota validation
-- `core/views.py`: Role-scoped dashboards, attendance check-in/out, holiday calendar, and leave approvals
-- `core/templates/`: `employee_dashboard.html`, `dashboard.html`, `holidays.html`, `leaves_list.html`, `leave_apply.html`, `home.html`, etc.
-- `core/static/css/style.css`: HROS design system, color tokens, and responsive layout
+- [Architecture and current module boundaries](docs/ARCHITECTURE.md)
+- [Accounts and roles](docs/ACCOUNTS.md)
+- [Attendance policies](docs/ATTENDANCE_POLICY.md)
+- [Leave, payroll, and data ownership policies](docs/BUSINESS_POLICIES.md)
+- [Read-only versioned API](docs/API.md)
+- [Database migration](docs/DATABASE.md)
+- [Deployment, backup, recovery, rollback, and document storage](docs/OPERATIONS.md)
+- [Implementation evidence and limitations](docs/PROGRESS.md)
+
+The deployment target is Render using `render.yaml` and `scripts/start_server.py`. The older Vercel material is historical guidance and is not the verified production deployment path. Store production environment values in the hosting secret manager; `.env.example` documents their names without credentials.
+
+Native mobile applications, automatic statutory taxation, and comprehensive country/branch-specific policies are outside the verified release. Existing location and calendar reference models do not establish a complete multi-branch business implementation.

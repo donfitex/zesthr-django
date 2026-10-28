@@ -5,6 +5,11 @@ payroll application. It is developed as a modular Django monolith: modules own
 their data and business rules while sharing one deployable application until a
 separate service is justified by a concrete operational need.
 
+
+## Implementation status
+
+The domain table and global-readiness sections below describe the architectural roadmap. Current business models and most workflows remain in core, with modular services under core/services, explicit selectors and permissions, and organization ownership under apps/organizations. Document and anomaly models have separate modules. Recruitment, talent, AI, benefits, and comprehensive branch/country policy modules are not shipped implementations. See PROGRESS.md for verified delivery and outstanding operational work. This distinction also applies to the target module ownership and hire-to-active workflow descriptions below.
+
 ## Product domains
 
 | Domain | Responsibility |

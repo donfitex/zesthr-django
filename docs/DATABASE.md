@@ -22,7 +22,7 @@ Set **either** one URL (what Neon, Supabase, Render and Railway give you):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `DB_SSLMODE` | `require` | Encrypted connection. Use `disable` only for a database on the same private network. Overrides `?sslmode=` in the URL. |
+| `DB_SSLMODE` | `require` | Encrypted connection. Use `disable` only for an isolated disposable test database. Overrides `?sslmode=` in the URL. |
 | `DB_CONN_MAX_AGE` | `60` | Seconds a connection is reused. |
 | `DB_CONNECT_TIMEOUT` | `10` | Seconds before giving up connecting. |
 | `DB_DISABLE_SERVER_SIDE_CURSORS` | `False` | Set `True` behind a transaction pooler (pgbouncer, Neon's pooled endpoint). |
@@ -31,15 +31,16 @@ The password may contain special characters; URL-encode them in `DATABASE_URL` (
 
 ## Running the tests against PostgreSQL
 
-    # local PostgreSQL in Docker (any PostgreSQL 14+ works)
-    docker run -d --name hros-pg -e POSTGRES_USER=hros -e POSTGRES_PASSWORD=hros \
-        -e POSTGRES_DB=hros -p 5432:5432 postgres:16
+    docker compose -p hros-verification -f compose.test.yml up -d --wait
 
-    # Windows PowerShell:  $env:TEST_DB_PASSWORD="hros"
-    TEST_DB_PASSWORD=hros python manage.py test --settings=payroll_project.settings.test_postgres
+Use TEST_DB_NAME=hros, TEST_DB_USER=hros, TEST_DB_PASSWORD=hros-integration-only,
+TEST_DB_HOST=127.0.0.1, TEST_DB_PORT=55432 and
+DJANGO_SETTINGS_MODULE=payroll_project.settings.test_postgres. On PowerShell set
+each variable with `$env:NAME='value'`, then run `python manage.py test`.
 
-Django creates and drops its own `test_hros` database, so the role needs `CREATEDB`
-(the Docker user above is a superuser, so it has it).
+Django creates and drops test_hros. The disposable test role needs CREATEDB;
+never grant production application credentials this privilege merely to run tests.
+CI verifies PostgreSQL 17. The Compose fixture binds only to localhost.
 
 ## Moving existing SQLite data to PostgreSQL
 
@@ -75,29 +76,22 @@ After the copy, check the site, then archive `legacy.sqlite3` and `db.sqlite3`.
 
 ## Backup and restore
 
-Back up (custom format, compressed, no owner/privilege info so it restores anywhere):
+Use `python manage.py backup_database --directory <private-path>` from a trusted
+operator environment with a compatible PostgreSQL client. It writes a custom-format
+dump and checksum manifest without printing database credentials. Production backups
+must use encrypted durable storage with restricted access. See [operations](OPERATIONS.md)
+for restore rehearsal, verification, retention, and rollback procedures.
 
-    pg_dump "$DATABASE_URL" -Fc --no-owner --no-privileges -f hros_$(date +%F).dump
-
-Restore into an **empty** database (create it first). `--exit-on-error` stops at the first
-problem instead of leaving a half-restored database:
-
-    createdb hros_restore
-    pg_restore -d hros_restore --no-owner --no-privileges --exit-on-error hros_2026-10-18.dump
-
-Then point `DATABASE_URL` at it and run `python manage.py check`. Verify a restore by
-comparing row counts of `employee`, `attendance` and `auth_user` with the live database.
-
-Backups contain salaries and personal data: store them encrypted, with restricted access,
-and delete old ones according to your retention policy. Automated scheduling, retention
-and restore drills are set up in the operations phase (Commit 13.3).
+CI restores a PostgreSQL fixture into an isolated empty database and verifies employee
+links, exact payroll amounts, and attendance audit attribution. This demonstrates the
+recovery procedure; it does not establish a production backup schedule or recovery objective.
 
 ## What the database enforces by itself
 
 Rules the database refuses to break even if application code is bypassed:
 
 * one attendance row per employee per day; one salary row per employee per month
-* unique employee numbers, department names/codes, schedule names
+* unique employee numbers, organization-scoped department names/codes, and schedule names
 * salary, deductions and net pay cannot be negative
 * a leave cannot end before it starts
 * an employee cannot be their own manager
