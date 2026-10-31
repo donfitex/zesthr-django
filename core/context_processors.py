@@ -1,5 +1,7 @@
+from core.permissions import get_employee_profile
 from .models import AttendanceCorrectionRequest, Employee
 from .services import corrections
+from .services.messaging import visible_notifications
 
 
 def review_flags(request):
@@ -11,7 +13,7 @@ def review_flags(request):
     user = request.user
     if not user.is_authenticated:
         return {"pending_corrections": None}
-    profile = getattr(user, "employee_profile", None)
+    profile = get_employee_profile(user)
     is_hr = user.has_perm("core.review_attendance_corrections")
     if profile is None and not is_hr:
         return {"pending_corrections": None}
@@ -25,7 +27,7 @@ def review_flags(request):
     waiting = corrections.reviewable_requests(user).filter(
         status=AttendanceCorrectionRequest.PENDING).order_by().values("status").annotate(
             total=Count("pk")).values("total")
-    unread = Notification.objects.filter(recipient=user, read=False).order_by().values(
+    unread = visible_notifications(user).filter(read=False).order_by().values(
         "recipient_id").annotate(total=Count("pk")).values("total")
     counts = get_user_model().objects.filter(pk=user.pk).annotate(
         pending_count=Coalesce(Subquery(waiting[:1]), 0),
@@ -40,5 +42,5 @@ def notification_flags(request):
         return {}
     count = getattr(request, "_hros_unread_notifications", None)
     if count is None:
-        count = Notification.objects.filter(recipient=request.user, read=False).count()
+        count = visible_notifications(request.user).filter(read=False).count()
     return {"unread_notifications": count}

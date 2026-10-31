@@ -61,21 +61,17 @@ class ScheduleResolver:
     """Resolves schedules cheaply for many employees (loads the company default once)."""
 
     def __init__(self):
-        self._default, self._loaded = None, False
-
-    @property
-    def default(self):
-        if not self._loaded:
-            self._default = WorkSchedule.objects.filter(is_default=True, is_active=True).first()
-            self._loaded = True
-        return self._default
+        self._defaults = {}
 
     def for_employee(self, emp):
         if emp.work_schedule_id:
             return emp.work_schedule
         if emp.department_id and emp.department.work_schedule_id:
             return emp.department.work_schedule
-        return self.default
+        if emp.organization_id not in self._defaults:
+            self._defaults[emp.organization_id] = WorkSchedule.objects.filter(
+                organization_id=emp.organization_id, is_default=True, is_active=True).first()
+        return self._defaults[emp.organization_id]
 
 
 def resolve_schedule(emp):

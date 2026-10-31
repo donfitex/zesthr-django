@@ -1,3 +1,4 @@
+from core.permissions import get_employee_profile
 import calendar
 from datetime import date, timedelta
 
@@ -32,7 +33,7 @@ def employees_managed_by(user):
 
     Building block for manager-scoped views (approval queues, team attendance).
     """
-    profile = getattr(user, "employee_profile", None)
+    profile = get_employee_profile(user)
     if profile is None:
         return Employee.objects.none()
     return Employee.objects.filter(manager=profile, is_active=True)
@@ -135,7 +136,7 @@ def employee_notifications(emp, today, limit=6):
     if to_review:
         add("info", f"{to_review} attendance correction request{'s' if to_review != 1 else ''} waiting for your review.",
             "correction_list")
-    holiday = Holiday.objects.filter(date__in=[today, today + timedelta(days=1)]).order_by("date").first()
+    holiday = Holiday.objects.filter(organization_id=emp.organization_id, date__in=[today, today + timedelta(days=1)]).order_by("date").first()
     if holiday:
         when = "Today" if holiday.date == today else "Tomorrow"
         add("info", f"{when} is a holiday: {holiday.name}.", "holidays")
@@ -156,7 +157,7 @@ def employee_snapshot(emp, today):
         "today": today,
         "today_rec": record,
         "punch_state": punch_state(emp, record),
-        "today_holiday": Holiday.objects.filter(date=today).first(),
+        "today_holiday": Holiday.objects.filter(organization_id=emp.organization_id, date=today).first(),
         "month": month_summary(emp, today),
         "recent": _with_day_results(emp, Attendance.objects.filter(emp=emp).order_by("-date")[:10]),
         "leaves": LeaveApplication.objects.filter(emp=emp).order_by("-applied_on")[:5],
@@ -165,7 +166,7 @@ def employee_snapshot(emp, today):
         "sick_used": emp.sick_leaves_used_this_month(today.month, today.year),
         "sick_rem": emp.sick_leaves_remaining(today.month, today.year),
         "holidays": [{"holiday": h, "days_away": (h.date - today).days}
-                     for h in Holiday.objects.filter(date__gte=today).order_by("date")[:3]],
+                     for h in Holiday.objects.filter(organization_id=emp.organization_id, date__gte=today).order_by("date")[:3]],
         "payslips": Salary.objects.filter(emp=emp).order_by("-year", "-month")[:6],
         "notifications": employee_notifications(emp, today),
     }

@@ -1,3 +1,4 @@
+from core.permissions import get_employee_profile
 from apps.organizations.tenancy import scope_queryset
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -72,11 +73,7 @@ class LeaveApplicationViewSet(
     ]
 
     def get_queryset(self):
-        employee = getattr(
-            self.request.user,
-            "employee_profile",
-            None,
-        )
+        employee = get_employee_profile(self.request.user)
 
         if self.request.user.has_perm(
             "core.view_all_leaves"
@@ -100,11 +97,7 @@ class SalaryViewSet(TenantReadOnlyViewSet):
     ]
 
     def get_queryset(self):
-        employee = getattr(
-            self.request.user,
-            "employee_profile",
-            None,
-        )
+        employee = get_employee_profile(self.request.user)
 
         if self.request.user.has_perm(
             "core.view_all_payslips"

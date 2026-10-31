@@ -56,7 +56,7 @@ for model in (Department, JobPosition, EmploymentType, WorkLocation, WorkSchedul
 
 
 @admin.register(Holiday)
-class HolidayAdmin(admin.ModelAdmin):
+class HolidayAdmin(TenantAdmin):
     list_display = ("name", "date", "holiday_type")
     list_filter = ("holiday_type",)
     search_fields = ("name", "description")
@@ -152,7 +152,10 @@ class HROSUserAdmin(UserAdmin):
         if request.user.is_superuser:
             return queryset
         # Account operators cannot reset or impersonate privileged users.
-        return queryset.filter(is_superuser=False, is_staff=False, user_permissions__isnull=True).exclude(
+        from apps.organizations.tenancy import organization_ids_for
+        return queryset.filter(organization_memberships__organization_id__in=organization_ids_for(request.user),
+                               organization_memberships__is_active=True,
+                               is_superuser=False, is_staff=False, user_permissions__isnull=True).exclude(
             groups__permissions__isnull=False).distinct()
 
     def get_readonly_fields(self, request, obj=None):
@@ -200,7 +203,7 @@ class HROSUserAdmin(UserAdmin):
 
 
 @admin.register(SecurityEvent)
-class SecurityEventAdmin(admin.ModelAdmin):
+class SecurityEventAdmin(TenantAdmin):
     """Read-only audit trail: nobody can add, edit or delete entries from here."""
 
     list_display = ("created_at", "event_type", "username", "ip_address", "detail")
@@ -309,3 +312,27 @@ class PayrollHistoryAdmin(TenantAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+# Group permissions are platform configuration, never tenant-controlled.
+from django.contrib.auth.models import Group
+from django.contrib.auth.admin import GroupAdmin
+admin.site.unregister(Group)
+
+
+@admin.register(Group)
+class PlatformGroupAdmin(GroupAdmin):
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser

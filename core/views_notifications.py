@@ -3,11 +3,12 @@ from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from .models import Notification
+from .services.messaging import visible_notifications
 
 
 @login_required
 def inbox(request):
-    items = Notification.objects.filter(recipient=request.user)
+    items = visible_notifications(request.user)
     unread = request.GET.get("unread") == "1"
     if unread:
         items = items.filter(read=False)
@@ -20,13 +21,13 @@ def inbox(request):
 @login_required
 @require_POST
 def mark_read(request, pk):
-    item = get_object_or_404(Notification, pk=pk, recipient=request.user)
-    Notification.objects.filter(pk=item.pk, recipient=request.user).update(read=True)
+    item = get_object_or_404(visible_notifications(request.user), pk=pk)
+    visible_notifications(request.user).filter(pk=item.pk).update(read=True)
     return redirect("notifications")
 
 
 @login_required
 @require_POST
 def mark_all_read(request):
-    Notification.objects.filter(recipient=request.user, read=False).update(read=True)
+    visible_notifications(request.user).filter(read=False).update(read=True)
     return redirect("notifications")

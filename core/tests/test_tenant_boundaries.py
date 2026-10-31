@@ -9,7 +9,7 @@ from .test_permissions import BaseTest
 class TenantBoundaryTests(BaseTest):
     def setUp(self):
         self.other_org = Organization.objects.create(name="Foreign", code="FOREIGN")
-        OrganizationMembership.objects.create(user=self.hr_admin, organization=self.alice.organization)
+        OrganizationMembership.objects.get_or_create(user=self.hr_admin, organization=self.alice.organization)
         self.foreign = Employee.objects.create(name="ForeignPerson", organization=self.other_org,
                                                basic_salary=5000, joined_on=date(2025, 1, 1))
         self.attendance = Attendance.objects.create(emp=self.foreign, date=timezone.localdate())

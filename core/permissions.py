@@ -39,7 +39,12 @@ def get_employee_profile(user):
     """The Employee record linked to this login, or None."""
     if not user.is_authenticated:
         return None
-    return getattr(user, "employee_profile", None)
+    profile = getattr(user, "employee_profile", None)
+    if profile is not None:
+        from apps.organizations.tenancy import organization_ids_for
+        if profile.organization_id not in organization_ids_for(user):
+            return None
+    return profile
 
 
 def employee_access(user, employee):
@@ -56,6 +61,10 @@ def employee_access(user, employee):
     profile = get_employee_profile(user)
     is_self = profile is not None and profile.pk == employee.pk
     is_manager = profile is not None and employee.manager_id == profile.pk  # direct reports only
+    from apps.organizations.tenancy import organization_ids_for
+    if employee.organization_id not in organization_ids_for(user):
+        return SimpleNamespace(can_view=False, is_self=False, is_manager=False,
+                               employment=False, personal=False, pay=False)
     sees_hr = user.has_perm(roles.VIEW_EMPLOYEE)
     return SimpleNamespace(
         can_view=is_self or is_manager or sees_hr, is_self=is_self, is_manager=is_manager,

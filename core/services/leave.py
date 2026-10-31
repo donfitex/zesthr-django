@@ -1,3 +1,4 @@
+from core.permissions import get_employee_profile
 """Transactional leave submission, review, and cancellation.
 
 Calendar days count toward leave, preserving the established policy. Pending
@@ -51,7 +52,7 @@ def validate_leave_request(employee, leave_type, start, end, *, exclude_pk=None)
 def _authorize(leave, by):
     if by is None:  # internal management/service caller
         return
-    profile = getattr(by, "employee_profile", None)
+    profile = get_employee_profile(by)
     manager = bool(profile and profile.is_active and leave.emp.manager_id == profile.pk)
     if not by.is_authenticated or not (by.has_perm(roles.APPROVE_LEAVE) or manager):
         raise PermissionDenied
@@ -168,6 +169,6 @@ def reviewable_leaves(user):
                               user, "emp__organization")
     if user.has_perm(roles.APPROVE_LEAVE):
         return queryset.exclude(emp__user=user)
-    profile = getattr(user, "employee_profile", None)
+    profile = get_employee_profile(user)
     return (queryset.filter(emp__manager=profile).exclude(emp__user=user)
             if profile and profile.is_active else queryset.none())

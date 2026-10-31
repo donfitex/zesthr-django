@@ -57,3 +57,10 @@ The default test command uses isolated test settings. GitHub Actions runs the fu
 The deployment target is Render using `render.yaml` and `scripts/start_server.py`. The older Vercel material is historical guidance and is not the verified production deployment path. Store production environment values in the hosting secret manager; `.env.example` documents their names without credentials.
 
 Native mobile applications, automatic statutory taxation, and comprehensive country/branch-specific policies are outside the verified release. Existing location and calendar reference models do not establish a complete multi-branch business implementation.
+
+## Neon, organization isolation and messaging
+
+See [Neon Auth and messaging setup](docs/NEON_AND_MESSAGING.md) for Neon PostgreSQL
+and managed Neon Auth, organization invitations, tenant isolation, HR announcements,
+the website help assistant, and verified WhatsApp attendance and notification commands.
+Neon and Meta account configuration is required before their live integrations work.

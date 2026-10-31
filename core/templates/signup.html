@@ -1,6 +1,6 @@
 {% extends "auth_base.html" %}
 
-{% load socialaccount %}
+{% load socialaccount static %}
 
 {% block title %}Create Account{% endblock %}
 
@@ -13,8 +13,8 @@
 
 {% block card %}
 
-<form method="post" class="login-card" novalidate>
-    {% csrf_token %}
+<form method="post" class="login-card" novalidate {% if neon_auth_enabled %}data-neon-signup{% endif %}>
+    {% csrf_token %}{{ form.invitation }}{% for error in form.invitation.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
 
     <div class="auth-header">
         <h2>Create your HROS account</h2>
@@ -64,6 +64,7 @@
 
     </div>
 
+{% if form.username %}
     <div class="form-group">
         <label for="{{ form.username.id_for_label }}">
             Username
@@ -78,6 +79,7 @@
         {% endfor %}
     </div>
 
+{% endif %}
     <div class="form-group">
         <label for="{{ form.email.id_for_label }}">
             Email address
@@ -148,5 +150,6 @@
     </p>
 
 </form>
+{% if neon_auth_enabled %}<script type="module" src="{% static 'core/neon-signup.bundle.js' %}"></script>{% endif %}
 
 {% endblock %}

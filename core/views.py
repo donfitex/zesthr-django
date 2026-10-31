@@ -575,7 +575,7 @@ def attendance_register(request):
         people = people.filter(Q(name__icontains=q) | Q(employee_number__icontains=q))
     people = scope_queryset(people, request.user)
     records = {r.emp_id: r for r in Attendance.objects.filter(date=day, emp__in=people)}
-    holiday = Holiday.objects.filter(date=day).first()
+    holiday = scope_queryset(Holiday.objects.filter(date=day), request.user).first()
     resolver = schedules_service.ScheduleResolver()
     rows, counts = [], {"P": 0, "H": 0, "A": 0, "L": 0, "unmarked": 0, "off": 0}
     for emp in people:
@@ -825,7 +825,7 @@ def slip(request, pk):
 @login_required
 def holidays_list(request):
     today = timezone.localdate()
-    holidays = Holiday.objects.all().order_by("date")
+    holidays = scope_queryset(Holiday.objects.all(), request.user).order_by("date")
     h_type = request.GET.get("type")
     if h_type in ("gazetted", "restricted"):
         holidays = holidays.filter(holiday_type=h_type)

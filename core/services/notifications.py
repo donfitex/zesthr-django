@@ -12,11 +12,12 @@ def notify(
     message,
     url="",
     unique_key=None,
+    organization=None,
 ):
     if not user:
         return None
 
-    values = dict(notification_type=notification_type, title=title, message=message, url=url)
+    values = dict(organization=organization, notification_type=notification_type, title=title, message=message, url=url)
     if unique_key:
         notification, _ = Notification.objects.get_or_create(
             recipient=user, unique_key=unique_key, defaults=values)
@@ -30,6 +31,7 @@ def notify_leave_decision(leave):
         return None
 
     return notify(
+        organization=leave.emp.organization,
         user=leave.emp.user,
         notification_type=Notification.LEAVE_DECISION,
         title="Leave application updated",
@@ -50,6 +52,7 @@ def notify_pending_leave(leave):
         return None
 
     return notify(
+        organization=leave.emp.organization,
         user=manager.user,
         notification_type=Notification.LEAVE_PENDING,
         title="Leave approval required",
@@ -64,15 +67,14 @@ def notify_pending_leave(leave):
 def notify_attendance_reviewers(organization, *, count, day):
     from django.contrib.auth.models import User
     from django.db.models import Q
-    from apps.organizations.models import Organization
     people = User.objects.filter(is_active=True).filter(
         Q(is_superuser=True) | Q(groups__permissions__codename="review_attendance_corrections")
         | Q(user_permissions__codename="review_attendance_corrections"))
-    if Organization.objects.count() > 1:
-        people = people.filter(Q(is_superuser=True) | Q(
-            organization_memberships__organization=organization, organization_memberships__is_active=True))
+    people = people.filter(organization_memberships__organization=organization,
+                           organization_memberships__is_active=True,
+                           organization_memberships__organization__is_active=True)
     for person in people.distinct():
-        notify(user=person, notification_type=Notification.ATTENDANCE_EXCEPTION,
+        notify(user=person, organization=organization, notification_type=Notification.ATTENDANCE_EXCEPTION,
                title="Attendance exceptions need review",
                message=f"{count} new attendance signal(s) were identified. Review the explanations before making a decision.",
                url="/attendance/reviews/", unique_key=f"anomaly-summary:{organization.pk}:{day}")

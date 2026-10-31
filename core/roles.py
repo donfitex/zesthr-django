@@ -159,3 +159,6 @@ for _role in (SUPER_ADMIN, HR_ADMIN):
     ROLE_PERMISSIONS[_role] += ["core.approve_payroll", "core.finalize_payroll", "core.reverse_payroll"]
 ROLE_PERMISSIONS[PAYROLL_OFFICER] += ["core.finalize_payroll"]
 ROLE_PERMISSIONS[FINANCE_OFFICER] += ["core.approve_payroll"]
+
+for _role in (SUPER_ADMIN, HR_ADMIN, HR_MANAGER, HR_OFFICER):
+    ROLE_PERMISSIONS[_role] += ['core.send_announcement']

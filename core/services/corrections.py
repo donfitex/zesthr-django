@@ -1,3 +1,4 @@
+from core.permissions import get_employee_profile
 """Attendance correction requests: an employee asks, a manager or HR decides.
 
 Who may decide
@@ -34,11 +35,11 @@ def window_start(emp):
 
 def can_review(user, req):
     """May `user` approve or reject `req`?"""
-    if not user.is_authenticated or req.emp.user_id == user.pk:
+    if not user.is_authenticated or not scope_queryset(Employee.objects.filter(pk=req.emp_id), user).exists() or req.emp.user_id == user.pk:
         return False  # never your own request
     if user.has_perm(roles.REVIEW_CORRECTIONS):
         return scope_queryset(Employee.objects.filter(pk=req.emp_id), user).exists()
-    profile = getattr(user, "employee_profile", None)
+    profile = get_employee_profile(user)
     return profile is not None and profile.is_active and req.emp.manager_id == profile.pk
 
 
@@ -47,7 +48,7 @@ def reviewable_requests(user):
     qs = scope_queryset(Request.objects.select_related("emp", "decided_by"), user, "emp__organization")
     if user.has_perm(roles.REVIEW_CORRECTIONS):
         return qs.exclude(emp__user=user)
-    profile = getattr(user, "employee_profile", None)
+    profile = get_employee_profile(user)
     if profile is None or not profile.is_active:
         return qs.none()
     return qs.filter(emp__manager=profile).exclude(emp__user=user)

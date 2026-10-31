@@ -16,6 +16,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 # Reads <project root>/.env if it exists. override=False: real environment
 # variables (e.g. set by the hosting platform) always win over the file.
 if env_bool("DJANGO_LOAD_DOTENV", True):
+    # Neon writes .env.local unless an existing .env is present. Process values win.
+    load_dotenv(BASE_DIR / ".env.local", override=False)
     load_dotenv(BASE_DIR / ".env", override=False)
 
 INSTALLED_APPS = [
@@ -45,6 +47,7 @@ MIDDLEWARE = [
     "allauth.account.middleware.AccountMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.TenantScopeMiddleware",
     "core.middleware.ForcePasswordChangeMiddleware",
 ]
 
@@ -175,3 +178,19 @@ STORAGES = {
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
     "private_documents": private_document_storage(BASE_DIR),
 }
+
+# Neon managed Better Auth. Empty URL keeps the existing local development login.
+NEON_AUTH_BASE_URL = env('NEON_AUTH_BASE_URL', '').strip()
+NEON_AUTH_APP_ORIGIN = env('NEON_AUTH_APP_ORIGIN', 'http://localhost:8000').strip()
+if NEON_AUTH_BASE_URL:
+    # Provider passwords never authenticate against local Django accounts.
+    AUTHENTICATION_BACKENDS = ['core.auth_backends.NeonBackend']
+    MIDDLEWARE.insert(MIDDLEWARE.index('core.middleware.ForcePasswordChangeMiddleware'),
+                      'core.middleware.NeonSessionMiddleware')
+
+WHATSAPP_VERIFY_TOKEN = env('WHATSAPP_VERIFY_TOKEN', '')
+WHATSAPP_APP_SECRET = env('WHATSAPP_APP_SECRET', '')
+WHATSAPP_ACCESS_TOKEN = env('WHATSAPP_ACCESS_TOKEN', '')
+WHATSAPP_PHONE_NUMBER_ID = env('WHATSAPP_PHONE_NUMBER_ID', '')
+WHATSAPP_DISPLAY_NUMBER = env('WHATSAPP_DISPLAY_NUMBER', '')
+WHATSAPP_API_VERSION = env('WHATSAPP_API_VERSION', 'v23.0')

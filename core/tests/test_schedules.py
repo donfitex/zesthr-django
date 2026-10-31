@@ -254,7 +254,7 @@ class TimeZoneTests(TestCase):
                 Attendance(emp=e, date=date(2026, 1, 7)).clean()
 
 
-class ScheduleValidationTests(SimpleTestCase):
+class ScheduleValidationTests(TestCase):
     def test_policy_field_rules(self):
         def check(**kw):
             WorkSchedule(**{"name": "S", "start_time": time(9), "end_time": time(17), **kw}).full_clean(

@@ -27,3 +27,11 @@ backups/
 *.tfstate.*
 .terraform/
 *.tfvars
+.neon
+node_modules/
+
+# Neon tooling and generated credentials
+node_modules/
+.neon
+.neon/
+core/static/core/neon-signup.bundle.js

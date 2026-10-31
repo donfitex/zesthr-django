@@ -19,3 +19,8 @@ DATABASES = {
 
 # Emails are printed in the terminal instead of being sent.
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Optional Neon PostgreSQL in development; an unset URL retains isolated SQLite.
+if env('DATABASE_URL', '').strip():
+    from .env import postgres_database
+    DATABASES = {'default': postgres_database(env('DATABASE_URL'))}

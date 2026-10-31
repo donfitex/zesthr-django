@@ -22,3 +22,6 @@ backups
 .terraform
 **/*.tfstate*
 **/*.tfvars
+
+node_modules
+.neon

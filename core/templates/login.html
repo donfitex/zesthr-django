@@ -25,13 +25,13 @@
     <input type="hidden" name="next" value="{{ next }}">
 
     <label>
-        Username or Email
+        {{ form.username.label }}
 
         <input
             name="username"
             autofocus
             required
-            autocomplete="username"
+            autocomplete="{{ form.username.widget.attrs.autocomplete|default:'username' }}"
             placeholder="Enter your username or email"
         >
     </label>

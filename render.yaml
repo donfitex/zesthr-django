@@ -8,7 +8,8 @@ services:
 
     buildCommand: |
       pip install -r requirements.txt
-      python manage.py collectstatic --noinput
+      npm ci --include=dev
+      npm run build
 
     startCommand: |
       python scripts/start_server.py
@@ -30,16 +31,16 @@ services:
         value: require
 
       - key: DB_POOLED
-        value: "False"
+        value: "True"
 
       - key: DB_DISABLE_SERVER_SIDE_CURSORS
-        value: "False"
+        value: "True"
 
       - key: DB_CONNECT_TIMEOUT
         value: "10"
 
       - key: DB_CONN_MAX_AGE
-        value: "60"
+        value: "0"
 
       - key: DJANGO_HSTS_SECONDS
         value: "0"

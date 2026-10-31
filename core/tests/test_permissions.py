@@ -16,6 +16,9 @@ def make_user(username, role=None, **extra):
     user = User.objects.create_user(username, password="pw-12345-x", **extra)
     if role:
         user.groups.add(Group.objects.get(name=role))
+        # Privilege and explicit tenant membership are separate prerequisites.
+        from core.models import default_organization
+        OrganizationMembership.objects.get_or_create(user=user, organization=default_organization())
     return user
 
 
@@ -219,7 +222,7 @@ class TenantIsolationTests(BaseTest):
         outsider = Employee.objects.create(
             name="Outsider", designation="Dev", basic_salary=Decimal("30000"), organization=other_org
         )
-        OrganizationMembership.objects.create(user=self.hr_admin, organization=default_org)
+        OrganizationMembership.objects.get_or_create(user=self.hr_admin, organization=default_org)
 
         self.login(self.hr_admin)
         self.assertEqual(self.client.get(reverse("employee_detail", args=[outsider.pk])).status_code, 404)

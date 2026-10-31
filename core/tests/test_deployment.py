@@ -96,7 +96,7 @@ class PooledDatabaseTests(SimpleTestCase):
         self.assertEqual(out["host"], "ep-example-pooler.neon.tech")
 
     def test_not_pooled_keeps_persistent_connections(self):
-        out = prod_settings({"DJANGO_ALLOWED_HOSTS": "hr.example.com"}, self.EXPR)
+        out = prod_settings({"DJANGO_ALLOWED_HOSTS": "hr.example.com", "DB_POOLED": "False"}, self.EXPR)
         self.assertEqual((out["age"], out["cursors"]), (60, False))
         self.assertNotIn("prepare_threshold", out["opts"])
 

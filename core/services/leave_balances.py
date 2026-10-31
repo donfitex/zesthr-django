@@ -36,7 +36,7 @@ def chargeable_days(employee, start, end, entitlement):
         return Decimal((end - start).days + 1)
     schedule = resolve_schedule(employee)
     weekdays = schedule.working_days if schedule else [0, 1, 2, 3, 4]
-    holidays = set(Holiday.objects.filter(date__range=(start, end)).values_list("date", flat=True))
+    holidays = set(Holiday.objects.filter(organization_id=employee.organization_id, date__range=(start, end)).values_list("date", flat=True))
     day, total = start, 0
     while day <= end:
         if day.weekday() in weekdays and day not in holidays:

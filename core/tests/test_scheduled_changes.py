@@ -31,9 +31,9 @@ class ScheduledChangeSafetyTests(TestCase):
 
     def test_cross_tenant_assignment_rejected(self):
         self.change.department = Department.objects.create(name="Other", code="OTHER", organization=self.other)
-        self.change.save()
-        with self.assertRaises(ValidationError):
-            apply_scheduled_change(self.change)
+        from django.db import IntegrityError, transaction
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.change.save()
         self.assertFalse(self.employee.history.exists())
 
     def test_blank_reason_rejected(self):

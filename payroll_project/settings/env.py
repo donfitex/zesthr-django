@@ -50,3 +50,18 @@ def parse_database_url(url):
         "PORT": str(parsed.port or 5432),
         "SSLMODE": (parse_qs(parsed.query).get("sslmode") or [None])[0],
     }
+
+
+def postgres_database(url):
+    """Neon pooled endpoints need no persistent connections/prepared statements."""
+    config = parse_database_url(url)
+    mode = config.pop('SSLMODE') or 'verify-full'
+    if mode not in ('require', 'verify-ca', 'verify-full'):
+        raise ImproperlyConfigured('Hosted PostgreSQL requires TLS.')
+    pooled = env_bool('DB_POOLED', '-pooler.' in config['HOST'])
+    options = {'sslmode': mode, 'connect_timeout': 10}
+    if pooled:
+        options['prepare_threshold'] = None
+    return {'ENGINE': 'django.db.backends.postgresql', **config,
+            'CONN_MAX_AGE': int(env('DB_CONN_MAX_AGE', '0' if pooled else '60')), 'CONN_HEALTH_CHECKS': True,
+            'DISABLE_SERVER_SIDE_CURSORS': env_bool('DB_DISABLE_SERVER_SIDE_CURSORS', pooled), 'OPTIONS': options}

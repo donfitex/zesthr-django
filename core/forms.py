@@ -72,7 +72,7 @@ class EmployeeForm(forms.ModelForm):
                     field.queryset = scope_model_queryset(field.queryset, user)
             if "user" in self.fields and not user.is_superuser:
                 from apps.organizations.models import Organization
-                if Organization.objects.count() > 1:
+                if not user.is_superuser:
                     from apps.organizations.tenancy import organization_ids_for
                     self.fields["user"].queryset = self.fields["user"].queryset.filter(
                         organization_memberships__organization_id__in=organization_ids_for(user),

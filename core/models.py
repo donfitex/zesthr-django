@@ -24,15 +24,19 @@ def default_organization_id():
 
 
 class Department(models.Model):
-    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True, blank=True,
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, default=default_organization_id,
                                      related_name="departments")
-    name = models.CharField(max_length=100, unique=True)
-    code = models.CharField(max_length=10, unique=True, help_text="Short code, e.g. FIN")
+    name = models.CharField(max_length=100, )
+    code = models.CharField(max_length=10,  help_text="Short code, e.g. FIN")
     work_schedule = models.ForeignKey("WorkSchedule", on_delete=models.PROTECT, null=True, blank=True,
                                       related_name="departments", help_text="Default schedule for this department")
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="department_org_name_uniq"),
+            models.UniqueConstraint(fields=["organization", "code"], name="department_org_code_uniq"),
+        ]
         db_table = "department"
         ordering = ["name"]
 
@@ -46,12 +50,17 @@ class Department(models.Model):
 
 
 class JobPosition(models.Model):
-    title = models.CharField(max_length=100, unique=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT,
+                                     default=default_organization_id)
+    title = models.CharField(max_length=100, )
     department = models.ForeignKey(Department, on_delete=models.PROTECT, null=True, blank=True,
                                    related_name="positions", help_text="Optional: where this position usually sits")
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "title"], name="jobposition_org_title_uniq"),
+        ]
         db_table = "job_position"
         ordering = ["title"]
 
@@ -60,9 +69,14 @@ class JobPosition(models.Model):
 
 
 class EmploymentType(models.Model):
-    name = models.CharField(max_length=50, unique=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT,
+                                     default=default_organization_id)
+    name = models.CharField(max_length=50, )
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="employmenttype_org_name_uniq"),
+        ]
         db_table = "employment_type"
         ordering = ["name"]
 
@@ -109,7 +123,9 @@ def validate_time_zone(value):
 
 
 class WorkLocation(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT,
+                                     default=default_organization_id)
+    name = models.CharField(max_length=100, )
     city = models.CharField(max_length=100, blank=True)
     country = models.CharField(max_length=100, blank=True)
     time_zone = models.CharField(max_length=64, blank=True, validators=[validate_time_zone],
@@ -117,6 +133,9 @@ class WorkLocation(models.Model):
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="worklocation_org_name_uniq"),
+        ]
         db_table = "work_location"
         ordering = ["name"]
 
@@ -136,12 +155,14 @@ def validate_working_days(value):
 
 
 class WorkSchedule(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT,
+                                     default=default_organization_id)
     """A reusable shift pattern. Lateness and overtime rules are built on it in Phase 4.
 
     end_time earlier than start_time means an overnight shift.
     """
 
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100, )
     start_time = models.TimeField()
     end_time = models.TimeField()
     break_minutes = models.PositiveSmallIntegerField(default=0, validators=[MaxValueValidator(600)],
@@ -169,7 +190,9 @@ class WorkSchedule(models.Model):
     class Meta:
         db_table = "work_schedule"
         ordering = ["name"]
-        constraints = [models.UniqueConstraint(fields=["is_default"], condition=models.Q(is_default=True),
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="workschedule_org_name_uniq"),
+models.UniqueConstraint(fields=["organization", "is_default"], condition=models.Q(is_default=True),
                                                name="work_schedule_single_default")]
 
     def __str__(self):
@@ -208,7 +231,7 @@ class Employee(models.Model):
 
     employee_number = models.CharField(max_length=20, unique=True, null=True, blank=True,
                                        help_text="Leave blank to generate automatically (EMP-00001)")
-    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True, blank=True,
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, default=default_organization_id,
                                      related_name="employees")
     company = models.ForeignKey("organizations.Company", on_delete=models.PROTECT, null=True, blank=True,
                                 related_name="employees")
@@ -289,6 +312,24 @@ class Employee(models.Model):
             errors["separation_date"] = "Separation date cannot be before the joining date."
         if self.confirmation_date and self.joined_on and self.confirmation_date < self.joined_on:
             errors["confirmation_date"] = "Confirmation date cannot be before the joining date."
+        self.validate_tenant_relations(errors)
+        if errors:
+            raise ValidationError(errors)
+
+    def validate_tenant_relations(self, errors=None):
+        errors = errors if errors is not None else {}
+        org_id = self.organization_id
+        for field in ("company", "department", "employment_type", "work_location", "work_schedule", "position", "manager"):
+            if getattr(self, field + "_id") and getattr(self, field).organization_id != org_id:
+                errors[field] = "Select a record in the employee's organization."
+        for field in ("branch", "job_grade", "cost_center"):
+            if getattr(self, field + "_id"):
+                item = getattr(self, field)
+                if item.company.organization_id != org_id or (self.company_id and item.company_id != self.company_id):
+                    errors[field] = "Select a record in the employee's company and organization."
+        if self.team_id and (self.team.division.company.organization_id != org_id or
+                             (self.company_id and self.team.division.company_id != self.company_id)):
+            errors["team"] = "Select a team in the employee's company and organization."
         if errors:
             raise ValidationError(errors)
 
@@ -296,6 +337,7 @@ class Employee(models.Model):
         self.is_active = self.employment_status in self.ACTIVE_STATUSES
         if not self.organization_id:
             self.organization = default_organization()
+        self.validate_tenant_relations()
         self.employee_number = (self.employee_number or "").strip() or None
         super().save(*args, **kwargs)
         if self.employee_number is None:
@@ -427,6 +469,8 @@ class Salary(models.Model):
 
 
 class Holiday(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT,
+                                     default=default_organization_id)
     HOLIDAY_TYPES = [("gazetted", "Gazetted Holiday"), ("restricted", "Restricted Holiday")]
     name = models.CharField(max_length=150)
     date = models.DateField()
@@ -890,8 +934,8 @@ class PayrollAdjustment(models.Model):
             f"{self.description} - "
             f"{self.amount}"
         )
-        
-        
+
+
 class PayrollRun(models.Model):
     organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, default=default_organization_id)
     calculation_snapshot = models.JSONField(default=list, blank=True)
@@ -988,17 +1032,19 @@ class PayrollRun(models.Model):
             self.FINALIZED,
             self.REVERSED,
         }
-        
-        
+
+
 class HolidayCalendar(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT,
+                                     default=default_organization_id)
     name = models.CharField(
         max_length=100,
-        unique=True,
+
     )
 
     code = models.CharField(
         max_length=30,
-        unique=True,
+
     )
 
     country = models.CharField(
@@ -1011,6 +1057,10 @@ class HolidayCalendar(models.Model):
     )
 
     class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["organization", "name"], name="holidaycalendar_org_name_uniq"),
+            models.UniqueConstraint(fields=["organization", "code"], name="holidaycalendar_org_code_uniq"),
+        ]
         ordering = ["name"]
 
     def __str__(self):
@@ -1057,14 +1107,17 @@ class CalendarHoliday(models.Model):
             f"{self.calendar.name}: "
             f"{self.name} ({self.date})"
         )
-        
-        
+
+
 class Notification(models.Model):
+    organization = models.ForeignKey("organizations.Organization", on_delete=models.PROTECT, null=True, blank=True)
+    ANNOUNCEMENT = "ANNOUNCEMENT"
     LEAVE_DECISION = "LEAVE_DECISION"
     LEAVE_PENDING = "LEAVE_PENDING"
     ATTENDANCE_EXCEPTION = "ATTENDANCE_EXCEPTION"
 
     TYPES = [
+        (ANNOUNCEMENT, "Organization announcement"),
         (LEAVE_DECISION, "Leave decision"),
         (LEAVE_PENDING, "Pending leave"),
         (
@@ -1205,3 +1258,6 @@ class PayrollEvent(AppendOnlyModel):
 from .models_documents import EmployeeDocument, DocumentEvent  # noqa: E402,F401
 
 from .models_anomalies import AttendanceAnomaly, AnomalyDecision  # noqa: E402,F401
+
+from .models_messaging import (Announcement, OrganizationInvitation, WhatsAppLink, WhatsAppReceipt, WhatsAppOutbox)  # noqa: E402,F401
+from .models_messaging import NeonIdentity  # noqa: E402,F401

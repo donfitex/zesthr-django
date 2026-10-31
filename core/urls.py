@@ -1,4 +1,5 @@
 from . import views_compliance
+from . import views_messaging, views_whatsapp
 from . import views_notifications
 from . import views_anomalies
 from . import views_documents
@@ -13,6 +14,14 @@ from . import views as v
 from . import views_auth as a
 
 urlpatterns = [
+    path('auth/provider/sign-up/email', a.neon_sdk_signup, name='neon_sdk_signup'),
+    path('verify-email/', a.neon_verify_email, name='neon_verify_email'),
+    path('help/chat/', views_messaging.assistant, name='app_assistant'),
+    path('announcements/new/', views_messaging.announcement, name='announcement_create'),
+    path('organization/invite/', views_messaging.invitation, name='organization_invite'),
+    path('whatsapp/', views_messaging.whatsapp_link, name='whatsapp_link'),
+    path('integrations/whatsapp/webhook/', views_whatsapp.webhook, name='whatsapp_webhook'),
+    path('password/neon/reset/', a.neon_password_reset, name='neon_password_reset'),
     path("reports/audit/", views_compliance.report, name="compliance_report"),
     path("notifications/", views_notifications.inbox, name="notifications"),
     path("notifications/read-all/", views_notifications.mark_all_read, name="notifications_read_all"),
@@ -36,7 +45,7 @@ urlpatterns = [
     path("password/reset/complete/", auth.PasswordResetCompleteView.as_view(template_name="password_reset_complete.html"), name="password_reset_complete"),
     path("signup/", SignupView.as_view(), name="signup"),
     path("account/pending/", a.account_pending, name="account_pending" ),
-    path("logout/", auth.LogoutView.as_view(), name="logout"),
+    path("logout/", a.LogoutView.as_view(), name="logout"),
     path("", v.home, name="home"),
     path("dashboard/", v.dashboard, name="dashboard"),
     path("employees/", v.EmployeeList.as_view(), name="employee_list"),

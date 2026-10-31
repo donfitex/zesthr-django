@@ -80,14 +80,14 @@ def find_exceptions(date_from, date_to, *, kinds=DEFAULT_KINDS, department_id=No
             if result.overtime_minutes and OVERTIME in kinds:
                 rows.append(Row(OVERTIME, emp, rec.date, rec, f"{result.overtime_text} overtime"))
     if UNMARKED in kinds:
-        holidays = set(Holiday.objects.filter(date__range=(date_from, date_to)).values_list("date", flat=True))
+        holidays = set(Holiday.objects.filter(date__range=(date_from, date_to)).values_list("organization_id", "date"))
         for emp in people:
             schedule = resolver.for_employee(emp)
             working_days = schedule.working_days if schedule else [0, 1, 2, 3, 4]
             today = timeutil.today_for(emp)
             day = date_from
             while day <= date_to:
-                if (day < today and day not in holidays and day.weekday() in working_days
+                if (day < today and (emp.organization_id, day) not in holidays and day.weekday() in working_days
                         and (emp.pk, day) not in have and _employed_on(emp, day)):
                     rows.append(Row(UNMARKED, emp, day, None, "No attendance recorded"))
                 day += timedelta(days=1)

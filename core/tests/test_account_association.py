@@ -101,6 +101,11 @@ class CrossEmployeeAccessTests(BaseTest):
 
 
 class ProfileReassignmentTests(BaseTest):
+    def setUp(self):
+        # A free login must first accept an organization invitation.
+        from apps.organizations.models import OrganizationMembership
+        OrganizationMembership.objects.get_or_create(user=self.nobody, organization=self.alice.organization)
+
     def edit_url(self):
         return reverse("employee_edit", args=[self.alice.pk])
 

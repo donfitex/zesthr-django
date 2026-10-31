@@ -580,7 +580,7 @@ class ConcurrentDecisionTests(TransactionTestCase):
     def test_simultaneous_approvals_apply_once(self):
         alice = Employee.objects.create(name="Alice", designation="x", basic_salary=Decimal("1"), joined_on=date(2024, 1, 1),
                                         user=make_user("alice_c"))
-        reviewers = [make_user(f"hr{i}") for i in range(6)]
+        reviewers = [make_user(f"hr{i}", roles.HR_OFFICER) for i in range(6)]
         for u in reviewers:
             u.groups.add(Group.objects.get(name=roles.HR_OFFICER))
         req = corrections.submit(alice, date=D1, status="P", check_in=time(9), check_out=time(17), reason="x", by=alice.user)
