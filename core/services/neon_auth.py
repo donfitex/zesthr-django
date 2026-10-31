@@ -8,7 +8,10 @@ from django.core.exceptions import ImproperlyConfigured
 
 
 class NeonAuthError(Exception):
-    pass
+    def __init__(self, message, *, status_code=None, code=None):
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
 
 
 def enabled():
@@ -28,7 +31,20 @@ def call(endpoint, *, payload=None, cookie=None, method='POST'):
         response = requests.request(method, base + '/' + endpoint, json=payload,
             headers=headers, timeout=10, allow_redirects=False)
         if response.status_code >= 300:
-            raise NeonAuthError('Authentication could not be completed. Check your details or try again later.')
+            # Log only bounded classifications, never provider response bodies or credentials.
+            safe_codes = {'USER_NOT_FOUND', 'INVALID_EMAIL', 'EMAIL_NOT_VERIFIED',
+                          'INVALID_ORIGIN', 'INVALID_REDIRECT_URL', 'RATE_LIMIT_EXCEEDED'}
+            try:
+                error = response.json()
+                code = error.get('code') if isinstance(error, dict) else None
+                code = code if isinstance(code, str) and code in safe_codes else None
+            except ValueError:
+                code = None
+            import logging
+            logging.getLogger(__name__).warning('Neon Auth request failed: endpoint=%s status=%s code=%s',
+                                               endpoint, response.status_code, code or 'unclassified')
+            raise NeonAuthError('Authentication could not be completed. Check your details or try again later.',
+                                status_code=response.status_code, code=code)
         data = response.json()
         if not isinstance(data, dict):
             raise NeonAuthError('Authentication session is unavailable.')

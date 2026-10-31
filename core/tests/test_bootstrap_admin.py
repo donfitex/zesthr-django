@@ -55,6 +55,5 @@ class BootstrapAdminTests(TestCase):
 
     @override_settings(NEON_AUTH_BASE_URL='https://auth.example.com/auth')
     def test_neon_auth_requires_explicit_link(self):
-        with self.assertRaisesMessage(CommandError, 'Remove NEON_AUTH_BASE_URL'):
-            self.bootstrap()
+        self.bootstrap()
         self.assertFalse(User.objects.exists())

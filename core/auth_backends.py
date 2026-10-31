@@ -35,6 +35,7 @@ def provision(profile):
     if identity:
         identity.user.email = str(profile.get('email', ''))[:254]
         identity.user.save(update_fields=['email'])
+        grant_configured_neon_admin(identity.user, profile)
         return identity.user
     # Unique provider identity is the account key; email alone never grants access.
     username = 'neon_' + hashlib.sha256((issuer + ':' + subject).encode()).hexdigest()[:40]
@@ -45,11 +46,33 @@ def provision(profile):
         with transaction.atomic():
             user.save()
             NeonIdentity.objects.create(user=user, issuer=issuer, subject=subject)
+        grant_configured_neon_admin(user, profile)
         return user
     except IntegrityError:
         # A concurrent login may have provisioned the same verified identity.
         identity = NeonIdentity.objects.select_related('user').filter(issuer=issuer, subject=subject).first()
         if identity:
+            grant_configured_neon_admin(identity.user, profile)
             return identity.user
         # A colliding local username is never adopted by email or by username.
         raise neon_auth.NeonAuthError('Account provisioning requires administrator assistance.') from None
+
+
+def grant_configured_neon_admin(user, profile):
+    """Trusted deployment configuration authorizes one exact verified provider ID.
+
+    No existing local account is linked by its email, password or username.
+    """
+    import os
+    if os.environ.get('DJANGO_BOOTSTRAP_ADMIN', '').strip().lower() not in {'1', 'true', 'yes', 'on'}:
+        return
+    subject = os.environ.get('NEON_ADMIN_USER_ID', '').strip()
+    email = os.environ.get('NEON_ADMIN_EMAIL', '').strip()
+    if (not subject or not email or str(profile.get('id')) != subject
+            or not profile.get('emailVerified')
+            or str(profile.get('email', '')).strip().casefold() != email.casefold()
+            or not user.is_active):
+        return
+    if not (user.is_superuser and user.is_staff):
+        user.is_superuser, user.is_staff = True, True
+        user.save(update_fields=['is_superuser', 'is_staff'])

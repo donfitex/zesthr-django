@@ -1,6 +1,7 @@
 from core.permissions import get_employee_profile
 """Sign-in, password change and password reset."""
 from django.conf import settings
+from django.views.decorators.cache import never_cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.debug import sensitive_post_parameters
 from django.contrib import messages
@@ -67,7 +68,7 @@ class LoginView(auth.LoginView):
    
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        
+        context['neon_auth_enabled'] = neon_auth.enabled()
         context["google_login_enabled"] = bool(
             not neon_auth.enabled() and settings.GOOGLE_OAUTH_CLIENT_ID
             and settings.GOOGLE_OAUTH_CLIENT_SECRET
@@ -124,9 +125,13 @@ class PasswordResetView(auth.PasswordResetView):
         if neon_auth.enabled():
             try:
                 neon_auth.call('request-password-reset', payload={'email': email,
-                    'redirectTo': self.request.build_absolute_uri(reverse_lazy('neon_password_reset'))})
-            except neon_auth.NeonAuthError:
-                pass  # Generic response prevents account enumeration.
+                    'redirectTo': settings.NEON_AUTH_APP_ORIGIN.rstrip('/') + str(reverse_lazy('neon_password_reset'))})
+            except neon_auth.NeonAuthError as exc:
+                if exc.code not in {'USER_NOT_FOUND', 'INVALID_EMAIL', 'EMAIL_NOT_VERIFIED'}:
+                    form.add_error(None, 'Password recovery is temporarily unavailable. Ask your administrator to check Neon email delivery, the Auth URL and trusted application origin, then try again.')
+                    response = self.form_invalid(form)
+                    response.status_code = 503
+                    return response
             return redirect(self.success_url)
         return super().form_valid(form)  # always says "if that address exists..." (no account enumeration)
 
@@ -213,6 +218,7 @@ def account_pending(request):
     return render(request, "account_pending.html")
 
 
+@never_cache
 @sensitive_post_parameters('password', 'confirmation')
 def neon_password_reset(request):
     from django import forms
@@ -230,9 +236,17 @@ def neon_password_reset(request):
             if data.get('password'):
                 validate_password(data['password'])
             return data
-    if request.GET.get('token'):
-        request.session['neon_reset_token'] = request.GET['token'][:2048]
+    if request.GET.get('error'):
+        request.session.pop('neon_reset_token', None)
+    elif request.GET.get('token'):
+        token = request.GET['token']
+        if len(token) <= 2048:
+            request.session['neon_reset_token'] = token
+        else:
+            request.session.pop('neon_reset_token', None)
         return redirect('neon_password_reset')
+    if not request.session.get('neon_reset_token'):
+        return render(request, 'neon_password_reset.html', {'valid_link': False})
     form = ResetForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         try:
@@ -244,7 +258,7 @@ def neon_password_reset(request):
             request.session.pop('neon_reset_token', None)
             messages.success(request, 'Password reset. Sign in with your new password.')
             return redirect('login')
-    return render(request, 'neon_password_reset.html', {'form': form})
+    return render(request, 'neon_password_reset.html', {'form': form, 'valid_link': True})
 
 
 class LogoutView(auth.LogoutView):

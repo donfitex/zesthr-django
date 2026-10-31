@@ -16,9 +16,13 @@ services:
 
     envVars:
       # Add DJANGO_SUPERUSER_USERNAME, DJANGO_SUPERUSER_EMAIL and
-      # DJANGO_SUPERUSER_PASSWORD privately in Render when enabling bootstrap.
+      # DJANGO_SUPERUSER_PASSWORD privately in Render for local-password bootstrap.
+      # With Neon Auth, use NEON_ADMIN_USER_ID + NEON_ADMIN_EMAIL instead.
       - key: DJANGO_BOOTSTRAP_ADMIN
         value: "False"
+
+      - key: NEON_AUTH_APP_ORIGIN
+        value: https://zesthr-django.onrender.com
 
       - key: DJANGO_SETTINGS_MODULE
         value: payroll_project.settings.production

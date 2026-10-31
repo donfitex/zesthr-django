@@ -81,5 +81,35 @@ Sign in at `/admin/`, then set `DJANGO_BOOTSTRAP_ADMIN=False` and remove
 `DJANGO_SUPERUSER_PASSWORD` from Render. Save/redeploy again.
 Existing accounts are never promoted, reactivated or given a new password.
 This creates a platform superuser with access across organizations; ordinary HR
-users should have scoped memberships. Neon Auth requires an explicit identity
-link instead of this Django-password bootstrap. Never commit real credentials.
+users should have scoped memberships. Neon Auth uses the verified-user administrator setup below rather than local
+passwords. Never commit real credentials.
+
+## Neon Auth administrator and password recovery
+
+Keep `NEON_AUTH_BASE_URL` enabled to let Neon own signup, login, verification and
+password recovery. A local Django administrator password is not a Neon password.
+Register your account with Neon through `/signup/` and verify its email first.
+In Neon Console → Auth → Users, copy that account's exact **user ID**. Set in Render:
+
+| Variable | Value |
+| --- | --- |
+| `NEON_AUTH_BASE_URL` | Your production branch Auth URL, including `/auth` |
+| `NEON_AUTH_APP_ORIGIN` | `https://zesthr-django.onrender.com` |
+| `DJANGO_BOOTSTRAP_ADMIN` | `True` temporarily |
+| `NEON_ADMIN_USER_ID` | The exact verified Neon user's ID |
+| `NEON_ADMIN_EMAIL` | That Neon user's verified email address |
+
+Save/redeploy, then sign in with the **Neon email and Neon password**, and open
+`/admin/`. Only the matching verified provider ID and email receive platform admin
+access. No local account is automatically linked by email. After successful login,
+set `DJANGO_BOOTSTRAP_ADMIN=False` and delete unused `DJANGO_SUPERUSER_PASSWORD`.
+The deliberately granted role remains after bootstrap is disabled.
+
+For password reset, enable email/password in Neon Auth and register the application
+origin in Neon's trusted domains. Neon—not Django SMTP—sends recovery email in this
+mode. Use `/password/reset/` for an account that actually exists in Neon; local-only
+accounts will not receive a provider reset. Check Neon email delivery settings,
+spam folders and production SMTP configuration if messages do not arrive.
+Provider/network/configuration failures now display a recovery-unavailable message
+instead of pretending delivery succeeded. Logs contain only the endpoint, HTTP
+status and a bounded error classification, never response bodies or reset tokens.

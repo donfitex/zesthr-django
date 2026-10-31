@@ -18,7 +18,11 @@ class Command(BaseCommand):
         if os.environ.get('DJANGO_BOOTSTRAP_ADMIN', '').strip().lower() not in {'1', 'true', 'yes', 'on'}:
             return
         if getattr(settings, 'NEON_AUTH_BASE_URL', ''):
-            raise CommandError('Remove NEON_AUTH_BASE_URL to use Django administrator bootstrap. Neon identities require explicit linking.')
+            if os.environ.get('NEON_ADMIN_USER_ID', '').strip() and os.environ.get('NEON_ADMIN_EMAIL', '').strip():
+                self.stdout.write('Neon administrator setup enabled: the configured verified Neon identity receives administrator access at its next sign-in. No local password is created or changed.')
+            else:
+                self.stdout.write('Neon Auth is enabled; local-password administrator bootstrap skipped. Set NEON_ADMIN_USER_ID and NEON_ADMIN_EMAIL to authorize an exact verified Neon user.')
+            return
         username = os.environ.get('DJANGO_SUPERUSER_USERNAME', '').strip()
         if not username:
             raise CommandError('Set DJANGO_SUPERUSER_USERNAME for administrator bootstrap.')

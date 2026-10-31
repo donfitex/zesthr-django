@@ -36,7 +36,9 @@ When `NEON_AUTH_BASE_URL` is empty, existing Django login/signup works for local
 development. When set, Neon is the only authentication backend; local passwords
 and Google/allauth shortcuts do not authenticate. Existing local users require an
 explicit, administrator-reviewed identity migration; matching an email alone is
-not a safe migration. Preserve a controlled administrative recovery procedure
+not a safe migration. For a fresh testing administrator, the README documents
+an opt-in grant using NEON_ADMIN_USER_ID plus NEON_ADMIN_EMAIL after verified
+Neon sign-in; this never merges or takes over the old local account. Preserve a controlled administrative recovery procedure
 before enabling Neon on an existing production deployment. The integration does
 not create a Neon project or move an existing production database automatically.
 
