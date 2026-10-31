@@ -251,3 +251,17 @@ The SDK check creates a real test user, signs in, reads back the matching curren
 user, signs out and verifies the session is absent. Required email verification
 can pause that check; complete it with the account you control before rerunning.
 Test identities are never automatically promoted or added to an organization.
+
+## Sign-in deployment recovery (31 October 2026)
+
+The production Auth branch initially had no trusted domains. It rejected sign-in with INVALID_ORIGIN and password recovery with INVALID_REDIRECT_URL. The exact website origin https://zesthr-django.onrender.com was added to the existing production branch's trusted domains; no wildcard or verification bypass was introduced.
+
+The existing Render service also retained its old Python-only build command despite the newer Blueprint. Signup then failed with HTTP 500 because core/neon-signup.bundle.js was absent. The Dashboard build command was corrected to:
+
+```sh
+pip install -r requirements.txt && npm ci --include=dev && npm run build:auth && python manage.py collectstatic --noinput
+```
+
+Build the browser bundle before collecting static assets. Collection must retain the deployment's production settings so the hashed manifest and files agree; isolated test settings belong to build checks, not production collection. Existing Render services do not automatically inherit edited Blueprint settings unless managed and synchronized as a Blueprint.
+
+Live smoke checks confirmed HTTP 200 for login, signup, the hashed signup JavaScript, health, and an unauthenticated provider session lookup. These checks do not establish successful user authentication. Subsequent sign-in requests reached Neon and returned EMAIL_NOT_VERIFIED. The account owner must complete the existing /verify-email/ flow and then sign in; do not bypass provider verification or reset roles to troubleshoot this condition.
