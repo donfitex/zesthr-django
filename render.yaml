@@ -15,6 +15,11 @@ services:
       python scripts/start_server.py
 
     envVars:
+      # Add DJANGO_SUPERUSER_USERNAME, DJANGO_SUPERUSER_EMAIL and
+      # DJANGO_SUPERUSER_PASSWORD privately in Render when enabling bootstrap.
+      - key: DJANGO_BOOTSTRAP_ADMIN
+        value: "False"
+
       - key: DJANGO_SETTINGS_MODULE
         value: payroll_project.settings.production
 

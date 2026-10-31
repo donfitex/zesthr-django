@@ -64,3 +64,22 @@ See [Neon Auth and messaging setup](docs/NEON_AND_MESSAGING.md) for Neon Postgre
 and managed Neon Auth, organization invitations, tenant isolation, HR announcements,
 the website help assistant, and verified WhatsApp attendance and notification commands.
 Neon and Meta account configuration is required before their live integrations work.
+
+## Create a testing administrator from Render environment settings
+
+Remove `NEON_AUTH_BASE_URL` from Render to use Django login, then set:
+
+| Variable | Value |
+| --- | --- |
+| `DJANGO_BOOTSTRAP_ADMIN` | `True` |
+| `DJANGO_SUPERUSER_USERNAME` | Your chosen administrator username |
+| `DJANGO_SUPERUSER_EMAIL` | Your email address |
+| `DJANGO_SUPERUSER_PASSWORD` | A strong unique password, at least 10 characters |
+
+Save and redeploy. Startup migrates the configured database and creates the admin.
+Sign in at `/admin/`, then set `DJANGO_BOOTSTRAP_ADMIN=False` and remove
+`DJANGO_SUPERUSER_PASSWORD` from Render. Save/redeploy again.
+Existing accounts are never promoted, reactivated or given a new password.
+This creates a platform superuser with access across organizations; ordinary HR
+users should have scoped memberships. Neon Auth requires an explicit identity
+link instead of this Django-password bootstrap. Never commit real credentials.

@@ -35,4 +35,5 @@ class Command(BaseCommand):
         with deployment_lock():
             call_command("migrate", interactive=False)
             call_command("migrate", check_unapplied=True)
+            call_command("bootstrap_admin")
         self.stdout.write(self.style.SUCCESS("Deployment schema is ready."))
