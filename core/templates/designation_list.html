@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Designations | HRMS Portal{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Designation Management</h1>
+    <p class="muted">Manage job roles, titles, and designation hierarchies across departments.</p>
+  </div>
+  <div class="actions">
+    {% if perms.core.add_jobposition or perms.core.add_employee %}
+      <a class="btn" href="{% url 'designation_add' %}">+ Add Designation</a>
+    {% endif %}
+    <a class="btn ghost" href="{% url 'department_list' %}">View Departments</a>
+    <a class="btn ghost" href="{% url 'employee_list' %}">All Employees</a>
+  </div>
+</div>
+
+<form method="get" class="filters">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search designation title..." aria-label="Search designations" style="max-width:280px;">
+  <select name="department" aria-label="Department" onchange="this.form.submit()" style="max-width:240px;">
+    <option value="">All Departments</option>
+    {% for d in departments %}
+      <option value="{{ d.pk }}" {% if selected_department == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn ghost sm">Search</button>
+  {% if q or selected_department %}<a class="btn ghost sm" href="{% url 'designation_list' %}">Clear</a>{% endif %}
+</form>
+
+<section class="card">
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Designation / Job Title</th>
+          <th>Department</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for des in designations %}
+        <tr>
+          <td><b>{{ des.title }}</b></td>
+          <td>{{ des.department.name|default:"General / Company-wide" }}</td>
+          <td>
+            <span class="tag {% if des.is_active %}P{% else %}A{% endif %}">
+              {% if des.is_active %}Active{% else %}Inactive{% endif %}
+            </span>
+          </td>
+          <td class="row-actions">
+            {% if perms.core.change_jobposition or perms.core.change_employee %}
+              <a href="{% url 'designation_edit' des.pk %}">Edit</a>
+            {% endif %}
+            <a href="{% url 'employee_list' %}?q={{ des.title|urlencode }}">View Employees</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="empty">
+            No designations found.
+            {% if perms.core.add_jobposition or perms.core.add_employee %}
+              <a href="{% url 'designation_add' %}">Add the first designation.</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if is_paginated %}
+  <nav class="pager" aria-label="Pages">
+    <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">‹ Previous</a>{% endif %}
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Next ›</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}
+

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Departments | HRMS Portal{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>Department Management</h1>
+    <p class="muted">Manage organizational departments and their assigned work schedules.</p>
+  </div>
+  <div class="actions">
+    {% if perms.core.add_department or perms.core.add_employee %}
+      <a class="btn" href="{% url 'department_add' %}">+ Add Department</a>
+    {% endif %}
+    <a class="btn ghost" href="{% url 'designation_list' %}">View Designations</a>
+    <a class="btn ghost" href="{% url 'employee_list' %}">All Employees</a>
+  </div>
+</div>
+
+<form method="get" class="filters">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search department name or code..." aria-label="Search departments" style="max-width:320px;">
+  <button class="btn ghost sm">Search</button>
+  {% if q %}<a class="btn ghost sm" href="{% url 'department_list' %}">Clear</a>{% endif %}
+</form>
+
+<section class="card">
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Department Name</th>
+          <th>Code</th>
+          <th>Default Schedule</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in departments %}
+        <tr>
+          <td><b>{{ d.name }}</b></td>
+          <td><span class="hros-badge" style="background:var(--navy);font-size:.75rem;">{{ d.code }}</span></td>
+          <td>{{ d.work_schedule|default:"Default Schedule" }}</td>
+          <td>
+            <span class="tag {% if d.is_active %}P{% else %}A{% endif %}">
+              {% if d.is_active %}Active{% else %}Inactive{% endif %}
+            </span>
+          </td>
+          <td class="row-actions">
+            {% if perms.core.change_department or perms.core.change_employee %}
+              <a href="{% url 'department_edit' d.pk %}">Edit</a>
+            {% endif %}
+            <a href="{% url 'employee_list' %}?department={{ d.pk }}">View Employees</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="empty">
+            No departments found.
+            {% if perms.core.add_department or perms.core.add_employee %}
+              <a href="{% url 'department_add' %}">Add the first department.</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if is_paginated %}
+  <nav class="pager" aria-label="Pages">
+    <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">‹ Previous</a>{% endif %}
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Next ›</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endblock %}
+

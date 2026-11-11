@@ -1,0 +1,53 @@
+<section class="highlights-card" aria-labelledby="highlights-heading">
+  <div class="highlights-header">
+    <h2 id="highlights-heading" class="highlights-title">
+      <span>🎉</span> Today's Highlights &amp; Celebrations
+    </h2>
+    <small style="color: var(--mut);">{{ today|date:"l, j F Y" }}</small>
+  </div>
+
+  <div class="highlights-grid">
+    <!-- BIRTHDAYS -->
+    <div class="highlight-column">
+      <div class="highlight-column-title">
+        <span>🎂</span> Today's Birthdays ({{ highlights.birthdays|length }})
+      </div>
+      <div class="highlight-list">
+        {% for b in highlights.birthdays %}
+        <a class="highlight-person-card" href="{% if perms.core.view_employee %}{% url 'employee_detail' b.employee.pk %}{% else %}#{% endif %}">
+          <div class="highlight-avatar bday">{{ b.employee.name|slice:":1" }}</div>
+          <div class="highlight-person-info">
+            <div class="highlight-person-name">{{ b.employee.name }}</div>
+            <div class="highlight-person-sub">{{ b.employee.designation }}{% if b.employee.department %} &bull; {{ b.employee.department.name }}{% endif %}</div>
+          </div>
+          <span class="highlight-pill bday">Birthday! 🎈</span>
+        </a>
+        {% empty %}
+        <p class="highlight-empty">No birthdays today.</p>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- WORK ANNIVERSARIES -->
+    <div class="highlight-column">
+      <div class="highlight-column-title">
+        <span>🏆</span> Work Anniversaries ({{ highlights.anniversaries|length }})
+      </div>
+      <div class="highlight-list">
+        {% for a in highlights.anniversaries %}
+        <a class="highlight-person-card" href="{% if perms.core.view_employee %}{% url 'employee_detail' a.employee.pk %}{% else %}#{% endif %}">
+          <div class="highlight-avatar anniv">{{ a.employee.name|slice:":1" }}</div>
+          <div class="highlight-person-info">
+            <div class="highlight-person-name">{{ a.employee.name }}</div>
+            <div class="highlight-person-sub">{{ a.employee.designation }}{% if a.employee.department %} &bull; {{ a.employee.department.name }}{% endif %}</div>
+          </div>
+          <span class="highlight-pill anniv">{{ a.milestone }} 🌟</span>
+        </a>
+        {% empty %}
+        <p class="highlight-empty">No work anniversaries today.</p>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+

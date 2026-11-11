@@ -8,7 +8,10 @@
     <p class="muted">{{ emp.position|default:emp.designation }} &bull; {{ emp.department|default:"No department yet" }}{% if emp.employee_number %} &bull; ID <b>{{ emp.employee_number }}</b>{% endif %}</p>
   </div>
   <div class="actions">
-    {% if emp.is_active %}<a class="btn" href="{% url 'leave_apply' %}">+ Apply Leave</a>{% endif %}
+    {% if emp.is_active %}
+      <a class="btn" href="{% url 'leave_apply' %}">+ Apply Leave</a>
+      <a class="btn ghost" href="{% url 'correction_new' %}">Regularize Attendance</a>
+    {% endif %}
     <a class="btn ghost" href="{% url 'holidays' %}">Holidays</a>
     <a class="btn ghost" href="{% url 'attendance_list' %}">My Attendance Log</a>
     <a class="btn ghost" href="{% url 'my_profile' %}">My Profile</a>
@@ -24,6 +27,9 @@
   {% endfor %}
 </section>
 {% endif %}
+
+<!-- HIGHLIGHTS SECTION: TODAY'S BIRTHDAYS & WORK ANNIVERSARIES -->
+{% include "partials/highlights.html" %}
 
 <div class="portal-grid">
   <!-- PUNCH CARD -->

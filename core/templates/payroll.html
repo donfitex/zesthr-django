@@ -1,14 +1,78 @@
 {% extends "base.html" %}
-{% block title %}Salary register{% endblock %}
+{% block title %}Monthly Salary Records - {{ month_name }} {{ year }} | HRMS Portal{% endblock %}
 {% block content %}
-<div class="head"><h1>Salary register: {{ month_name }} {{ year }}</h1>
-  {% if perms.core.generate_payroll %}<form method="post">{% csrf_token %}<button class="btn">{% if slips %}Recalculate payroll{% else %}Generate payroll{% endif %}</button></form>{% endif %}</div>
-<p><a class="btn ghost" href="{% url 'payroll_runs' %}">Review and finalize payroll runs</a> <a class="btn ghost" href="{% url 'payroll_csv' %}?month={{ month }}&year={{ year }}">Export CSV</a></p>
+<div class="head">
+  <div>
+    <h1>Monthly Salary Records: <small>{{ month_name }} {{ year }}</small></h1>
+    <p class="muted">Review generated payroll records, individual salary slips, and net payouts.</p>
+  </div>
+  {% if perms.core.generate_payroll %}
+  <div class="actions">
+    <form method="post" style="display:inline;">
+      {% csrf_token %}
+      <button class="btn">
+        {% if slips %}🔄 Recalculate Payroll{% else %}⚡ Generate Payroll{% endif %}
+      </button>
+    </form>
+    <a class="btn ghost" href="{% url 'payroll_csv' %}?month={{ month }}&year={{ year }}">📥 Export CSV</a>
+    <a class="btn ghost" href="{% url 'payroll_runs' %}">Payroll Runs</a>
+  </div>
+  {% endif %}
+</div>
+
 {% include "partials/period.html" %}
-<section class="card"><div class="scroll"><table>
-  <tr><th>Employee</th><th>Gross</th><th>Absent days</th><th>Deduction</th>{% if any_overtime %}<th>Overtime</th>{% endif %}<th>Net</th><th></th></tr>
-  {% for s in slips %}<tr><td>{{ s.emp.name }}</td><td>₹{{ s.gross }}</td><td>{{ s.absent_days }}</td><td>₹{{ s.deduction }}</td>{% if any_overtime %}<td>{% if s.overtime_pay %}+ ₹{{ s.overtime_pay }}{% else %}-{% endif %}</td>{% endif %}<td><b>₹{{ s.net }}</b></td><td class="row-actions"><a href="{% url 'slip' s.pk %}">View salary slip</a></td></tr>
-  {% empty %}<tr><td colspan="{% if any_overtime %}7{% else %}6{% endif %}" class="empty">No payroll for {{ month_name }} {{ year }} yet. Generate it with the button above.</td></tr>{% endfor %}
-  {% if slips %}<tr class="total"><td colspan="{% if any_overtime %}5{% else %}4{% endif %}">Total net payout</td><td colspan="2">₹{{ total }}</td></tr>{% endif %}
-</table></div></section>
+
+<section class="card">
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Gross Salary</th>
+          <th>Absent Days</th>
+          <th>Deductions</th>
+          {% if any_overtime %}<th>Overtime Pay</th>{% endif %}
+          <th>Net Payout</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in slips %}
+        <tr>
+          <td>
+            <b>{{ s.emp.name }}</b>
+            <div class="muted">{{ s.emp.designation }}{% if s.emp.department %} &bull; {{ s.emp.department.name }}{% endif %}</div>
+          </td>
+          <td>₹{{ s.gross|floatformat:2 }}</td>
+          <td>{{ s.absent_days }}</td>
+          <td style="color:var(--bad);">- ₹{{ s.deduction|floatformat:2 }}</td>
+          {% if any_overtime %}
+          <td style="color:var(--ok);">{% if s.overtime_pay %}+ ₹{{ s.overtime_pay|floatformat:2 }}{% else %}—{% endif %}</td>
+          {% endif %}
+          <td><b>₹{{ s.net|floatformat:2 }}</b></td>
+          <td class="row-actions">
+            <a href="{% url 'slip' s.pk %}">View Slip</a>
+            <a href="{% url 'slip_download' s.pk %}">&#128190; Download</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="{% if any_overtime %}7{% else %}6{% endif %}" class="empty">
+            No salary records generated for {{ month_name }} {{ year }} yet.
+            {% if perms.core.generate_payroll %}
+              Click the "Generate Payroll" button above to calculate salary slips.
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if slips %}
+        <tr class="total">
+          <td colspan="{% if any_overtime %}5{% else %}4{% endif %}">Total Monthly Net Payout</td>
+          <td colspan="2"><b>₹{{ total|floatformat:2 }}</b></td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}

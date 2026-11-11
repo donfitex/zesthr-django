@@ -169,6 +169,7 @@ def employee_snapshot(emp, today):
                      for h in Holiday.objects.filter(organization_id=emp.organization_id, date__gte=today).order_by("date")[:3]],
         "payslips": Salary.objects.filter(emp=emp).order_by("-year", "-month")[:6],
         "notifications": employee_notifications(emp, today),
+        "highlights": highlights_today(today, user=emp.user),
     }
 
 
@@ -214,6 +215,38 @@ def dashboard_snapshot(day, *, user=None):
 def department_attendance_summary(day, *, user=None):
     """Legacy facade; new code uses apps.organizations.selectors directly."""
     return organization_selectors.department_attendance_summary(day, user=user)
+
+
+def highlights_today(today, *, user=None):
+    """Return active employees celebrating a birthday or work anniversary today."""
+    active_employees = _scope(Employee.objects.filter(is_active=True).select_related("department", "position"), user)
+
+    birthdays = []
+    anniversaries = []
+
+    for emp in active_employees:
+        if emp.date_of_birth and emp.date_of_birth.month == today.month and emp.date_of_birth.day == today.day:
+            age = today.year - emp.date_of_birth.year
+            birthdays.append({
+                "employee": emp,
+                "age": age,
+            })
+
+        if emp.joined_on and emp.joined_on.month == today.month and emp.joined_on.day == today.day and emp.joined_on.year < today.year:
+            years = today.year - emp.joined_on.year
+            if years > 0:
+                suffix = "th" if 11 <= (years % 100) <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(years % 10, "th")
+                anniversaries.append({
+                    "employee": emp,
+                    "years": years,
+                    "milestone": f"{years}{suffix} Anniversary ({years} {'year' if years == 1 else 'years'})",
+                })
+
+    return {
+        "birthdays": birthdays,
+        "anniversaries": anniversaries,
+        "has_highlights": bool(birthdays or anniversaries),
+    }
 
 
 def _scope(queryset, user, field="organization"):

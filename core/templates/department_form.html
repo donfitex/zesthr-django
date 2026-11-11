@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} | HRMS Portal{% endblock %}
+{% block content %}
+<div class="head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="muted">Configure department details and operational work schedule.</p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{% url 'department_list' %}">&larr; Back to Departments</a>
+  </div>
+</div>
+
+<section class="card" style="max-width: 600px;">
+  <form method="post" class="form">
+    {% csrf_token %}
+    {% for e in form.non_field_errors %}<div class="toast error" role="alert">{{ e }}</div>{% endfor %}
+    {% for f in form %}
+      <div style="margin-bottom: 1.1rem;">
+        <label for="{{ f.id_for_label }}" style="display:block; font-weight:600; margin-bottom:.3rem;">
+          {{ f.label }}
+          {% if f.field.required %}<span style="color:var(--bad)">*</span>{% endif %}
+        </label>
+        {{ f }}
+        {% if f.help_text %}<small style="color:var(--mut); display:block; margin-top:.2rem;">{{ f.help_text }}</small>{% endif %}
+        {% for e in f.errors %}<small class="err" style="color:var(--bad); display:block;">{{ e }}</small>{% endfor %}
+      </div>
+    {% endfor %}
+    <div class="actions" style="margin-top: 1.5rem;">
+      <button type="submit" class="btn">Save Department</button>
+      <a class="btn ghost" href="{% url 'department_list' %}">Cancel</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
+

@@ -25,10 +25,11 @@ from apps.organizations.tenancy import scope_queryset
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from . import roles, selectors, timeutil
-from .forms import (AttendanceForm, BulkAttendanceForm, CorrectionRequestForm, DeactivateEmployeeForm, EmployeeForm,
-                    EmployeeSelfForm, LeaveApplicationForm)
+from django.template.loader import render_to_string
+from .forms import (AttendanceForm, BulkAttendanceForm, CorrectionRequestForm, DeactivateEmployeeForm,
+                    DepartmentForm, DesignationForm, EmployeeForm, EmployeeSelfForm, LeaveApplicationForm)
 from .models import (Attendance, AttendanceAudit, AttendanceCorrectionRequest, Department, Employee, Holiday,
-                     LeaveApplication, Salary, ScheduledEmploymentChange)
+                     JobPosition, LeaveApplication, Salary, ScheduledEmploymentChange, default_organization)
 from .permissions import (PermissionRequiredMixin, employee_access, get_employee_profile, permission_required,
                           require_employee_profile, require_perm)
 from .services import attendance as attendance_service
@@ -112,6 +113,7 @@ def dashboard(request):
         "today": today,
         "snapshot": snapshot,
         "departments": departments,
+        "highlights": selectors.highlights_today(today, user=request.user),
         "pending_leaves": (
             snapshot["pending_leaves"]
             if request.user.has_perm(
@@ -1007,3 +1009,203 @@ def attendance_report_csv(request):
         )
 
     return response
+
+
+# ---------- Payslip Download ----------
+@login_required
+def slip_download(request, pk):
+    """Download salary slip as a clean, styled HTML/printable document attachment."""
+    emp_profile = get_employee_profile(request.user)
+    slips = scope_queryset(Salary.objects.select_related("emp", "emp__organization", "emp__department"), request.user, "emp__organization")
+    if not request.user.has_perm(roles.VIEW_ALL_PAYSLIPS):
+        if not emp_profile:
+            raise PermissionDenied
+        slips = slips.filter(emp=emp_profile)
+    s = get_object_or_404(slips, pk=pk)
+    counts = payroll_service.attendance_totals(s)
+    content = render_to_string("slip.html", {
+        "s": s,
+        "c": counts,
+        "month_name": calendar.month_name[s.month],
+        "basic": s.calculation_snapshot.get("basic", s.gross - s.overtime_pay),
+        "components": s.calculation_snapshot.get("components", []),
+        "currency": s.calculation_snapshot.get("currency", s.emp.organization.default_currency),
+        "overtime_text": schedules_service.minutes_text(s.overtime_minutes),
+        "download_mode": True,
+    }, request=request)
+    emp_num = s.emp.employee_number or f"EMP{s.emp.pk}"
+    filename = f"payslip_{s.year}_{s.month:02d}_{emp_num}.html"
+    response = HttpResponse(content, content_type="text/html; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+# ---------- Department & Designation Management ----------
+class DepartmentList(LoginRequiredMixin, ListView):
+    template_name = "department_list.html"
+    context_object_name = "departments"
+    paginate_by = 30
+
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.has_perm("core.view_department") or request.user.has_perm(roles.VIEW_EMPLOYEE)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        qs = scope_queryset(Department.objects.select_related("work_schedule", "organization"), self.request.user)
+        q = self.request.GET.get("q", "").strip()
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(code__icontains=q))
+        return qs.order_by("name")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["q"] = self.request.GET.get("q", "").strip()
+        return ctx
+
+
+class DepartmentCreate(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+    model = Department
+    form_class = DepartmentForm
+    template_name = "department_form.html"
+    success_url = reverse_lazy("department_list")
+    success_message = "Department added successfully."
+
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.has_perm("core.add_department") or request.user.has_perm(roles.ADD_EMPLOYEE)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        from apps.organizations.tenancy import organization_ids_for
+        from apps.organizations.models import Organization
+        org_ids = organization_ids_for(self.request.user)
+        if org_ids:
+            form.instance.organization = Organization.objects.filter(id__in=org_ids).first() or default_organization()
+        else:
+            form.instance.organization = default_organization()
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Add Department"
+        return ctx
+
+
+class DepartmentUpdate(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = Department
+    form_class = DepartmentForm
+    template_name = "department_form.html"
+    success_url = reverse_lazy("department_list")
+    success_message = "Department updated successfully."
+
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.has_perm("core.change_department") or request.user.has_perm(roles.CHANGE_EMPLOYEE)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return scope_queryset(Department.objects.all(), self.request.user)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Edit Department"
+        return ctx
+
+
+class DesignationList(LoginRequiredMixin, ListView):
+    template_name = "designation_list.html"
+    context_object_name = "designations"
+    paginate_by = 30
+
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.has_perm("core.view_jobposition") or request.user.has_perm(roles.VIEW_EMPLOYEE)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        qs = scope_queryset(JobPosition.objects.select_related("department", "organization"), self.request.user)
+        q = self.request.GET.get("q", "").strip()
+        dept = self.request.GET.get("department", "")
+        if q:
+            qs = qs.filter(title__icontains=q)
+        if dept and dept.isdigit():
+            qs = qs.filter(department_id=int(dept))
+        return qs.order_by("title")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["q"] = self.request.GET.get("q", "").strip()
+        ctx["departments"] = scope_queryset(Department.objects.filter(is_active=True), self.request.user)
+        ctx["selected_department"] = self.request.GET.get("department", "")
+        return ctx
+
+
+class DesignationCreate(LoginRequiredMixin, SuccessMessageMixin, CreateView):
+    model = JobPosition
+    form_class = DesignationForm
+    template_name = "designation_form.html"
+    success_url = reverse_lazy("designation_list")
+    success_message = "Designation added successfully."
+
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.has_perm("core.add_jobposition") or request.user.has_perm(roles.ADD_EMPLOYEE)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def form_valid(self, form):
+        from apps.organizations.tenancy import organization_ids_for
+        from apps.organizations.models import Organization
+        org_ids = organization_ids_for(self.request.user)
+        if org_ids:
+            form.instance.organization = Organization.objects.filter(id__in=org_ids).first() or default_organization()
+        else:
+            form.instance.organization = default_organization()
+        return super().form_valid(form)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Add Designation"
+        return ctx
+
+
+class DesignationUpdate(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
+    model = JobPosition
+    form_class = DesignationForm
+    template_name = "designation_form.html"
+    success_url = reverse_lazy("designation_list")
+    success_message = "Designation updated successfully."
+
+    def dispatch(self, request, *args, **kwargs):
+        if not (request.user.has_perm("core.change_jobposition") or request.user.has_perm(roles.CHANGE_EMPLOYEE)):
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        return scope_queryset(JobPosition.objects.all(), self.request.user)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["user"] = self.request.user
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["title"] = "Edit Designation"
+        return ctx
+

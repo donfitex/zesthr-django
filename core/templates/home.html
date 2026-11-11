@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HROS &mdash; The Modern Human Resources &amp; Attendance Operating System</title>
+<title>HRMS Portal &mdash; Modern Workforce, Attendance &amp; Payroll Management</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{% static 'css/style.css' %}">
@@ -33,8 +33,8 @@
         <circle cx="29" cy="11" r="2.2" fill="#a7f3d0"/>
       </svg>
       <div class="hros-brand-text">
-        <span class="hros-title">HROS</span>
-        <span class="hros-badge">v2.5</span>
+        <span class="hros-title">HRMS Portal</span>
+        <span class="hros-badge">Core</span>
       </div>
     </a>
 
@@ -68,7 +68,7 @@
     
     <div class="hero-badge">
       <span class="badge-dot"></span>
-      <span>HROS Human Resources Operating System • Precision Attendance & Payroll</span>
+      <span>HRMS Portal • Attendance, Leave Management, Payroll &amp; Highlights</span>
     </div>
 
     <h1 class="hero-headline">
@@ -78,13 +78,13 @@
     </h1>
 
     <p class="hero-subtext">
-      The all-in-one workforce operating system built for modern teams. Streamline daily 1-click check-ins, auto-calculate Loss of Pay (LOP) deductions, and generate print-ready salary slips in seconds.
+      The complete HRMS Portal built for modern teams. Streamline daily 1-click check-ins, auto-calculate Loss of Pay (LOP) deductions, celebrate birthdays &amp; work anniversaries under Highlights, manage departments &amp; designations, and generate print-ready salary slips in seconds.
     </p>
 
     <div class="hero-cta-group">
       {% if user.is_authenticated %}
         <a href="{% url 'dashboard' %}" class="btn hros-cta-btn">
-          <span>Enter Dashboard</span>
+          <span>Enter HRMS Dashboard</span>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
         </a>
         <a href="{% url 'attendance_today' %}" class="btn ghost hros-cta-ghost">Today's Attendance Punch</a>
@@ -95,6 +95,22 @@
         </a>
         <a href="{% url 'signup' %}" class="btn ghost hros-cta-ghost">Create an Account</a>
       {% endif %}
+    </div>
+
+    <div style="margin: 1.5rem auto 0 auto; padding: 1rem 1.25rem; background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(13, 148, 136, 0.35); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.06); max-width: 680px; text-align: left;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div>
+          <div style="font-weight: 700; font-size: 0.9rem; color: #0f172a; display: flex; align-items: center; gap: 0.5rem;">
+            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
+            Quick Access Demo Credentials:
+          </div>
+          <div style="font-size: 0.85rem; color: #475569; margin-top: 0.35rem; display: flex; gap: 1rem; flex-wrap: wrap;">
+            <span>HR Admin: <code style="background: #e0f2fe; color: #0369a1; padding: 2px 6px; border-radius: 4px; font-weight: 600;">admin / admin123</code></span>
+            <span>Employee: <code style="background: #f1f5f9; color: #334155; padding: 2px 6px; border-radius: 4px; font-weight: 600;">aarav.sharma / emp123</code></span>
+          </div>
+        </div>
+        <a href="{% url 'login' %}" class="btn hros-primary-btn" style="font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 8px;">Sign In to HRMS &rarr;</a>
+      </div>
     </div>
 
     <div class="hero-trust-chips">
@@ -464,11 +480,11 @@
             <circle cx="20" cy="20" r="3.5" fill="#ffffff"/>
           </svg>
           <div class="hros-brand-text">
-            <span class="hros-title">HROS</span>
-            <span class="hros-badge">v2.5</span>
+            <span class="hros-title">HRMS Portal</span>
+            <span class="hros-badge">Core</span>
           </div>
         </div>
-        <p class="footer-tagline">Human Resources Operating System. Daily attendance and automated monthly payroll simplified.</p>
+        <p class="footer-tagline">HRMS Portal. Daily attendance, employee management, and automated monthly payroll simplified.</p>
       </div>
 
       <div class="footer-links-group">
@@ -483,7 +499,7 @@
 </div>
 
     <div class="footer-bottom">
-      <p>© 2026 HROS (Human Resources Operating System). All rights reserved.</p>
+      <p>© 2026 HRMS Portal. All rights reserved.</p>
 </div>
   </div>
 </footer>

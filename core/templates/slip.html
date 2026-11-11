@@ -1,23 +1,89 @@
 {% extends "base.html" %}
-{% block title %}Salary slip{% endblock %}
+{% block title %}Salary Slip - {{ s.calculation_snapshot.name|default:s.emp.name }} ({{ month_name }} {{ s.year }}){% endblock %}
 {% block content %}
-<div class="head noprint"><h1>Salary slip</h1><div class="actions"><button class="btn" onclick="window.print()">Print / save as PDF</button><a class="btn ghost" href="{% url 'payroll' %}?month={{ s.month }}&year={{ s.year }}">Back to register</a></div></div>
+<div class="head noprint">
+  <div>
+    <h1>Salary Slip <small>{{ month_name }} {{ s.year }}</small></h1>
+    <p class="muted">Monthly compensation statement and attendance breakdown.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{% url 'slip_download' s.pk %}">&#128190; Download Payslip</a>
+    <button class="btn ghost" onclick="window.print()">&#128424; Print / Save as PDF</button>
+    <a class="btn ghost" href="{% url 'payroll' %}?month={{ s.month }}&year={{ s.year }}">&larr; Back to Register</a>
+  </div>
+</div>
 <article class="slip">
-  <header><div class="slip-header-brand"><svg class="hros-logo-icon" width="28" height="28" viewBox="0 0 40 40" fill="none" style="vertical-align:middle;margin-right:8px"><defs><linearGradient id="hrosGradSlip" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#0284c7"/><stop offset="100%" stop-color="#0d9488"/></linearGradient></defs><rect width="40" height="40" rx="8" fill="url(#hrosGradSlip)"/><path d="M12 11V29M28 11V29M12 20H28" stroke="white" stroke-width="3.5" stroke-linecap="round"/><circle cx="20" cy="20" r="3" fill="#ffffff"/></svg><h2>HROS Payroll</h2><p>Salary slip for {{ month_name }} {{ s.year }}</p></div><div class="amount"><span>Net pay</span><b>{{ currency }} {{ s.net }}</b></div></header>
-  <dl class="meta"><div><dt>Employee</dt><dd>{{ s.calculation_snapshot.name|default:s.emp.name }}</dd></div><div><dt>Designation</dt><dd>{{ s.calculation_snapshot.designation|default:s.emp.designation }}</dd></div><div><dt>Employee ID</dt><dd>{{ s.emp.id }}</dd></div><div><dt>Generated</dt><dd>{{ s.generated_on|date:"j M Y" }}</dd></div></dl>
-  <h3>Attendance</h3>
-  <table><tr><th>Present</th><th>Half days</th><th>Leave</th><th>Absent</th></tr><tr><td>{{ c.present }}</td><td>{{ c.half }}</td><td>{{ c.leave }}</td><td>{{ c.absent }}</td></tr></table>
-  <h3>Earnings and deductions</h3>
+  <header>
+    <div class="slip-header-brand">
+      <svg class="hros-logo-icon" width="32" height="32" viewBox="0 0 40 40" fill="none" style="vertical-align:middle;margin-right:8px">
+        <defs>
+          <linearGradient id="hrosGradSlip" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#0284c7"/>
+            <stop offset="100%" stop-color="#0d9488"/>
+          </linearGradient>
+        </defs>
+        <rect width="40" height="40" rx="8" fill="url(#hrosGradSlip)"/>
+        <path d="M12 11V29M28 11V29M12 20H28" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+        <circle cx="20" cy="20" r="3" fill="#ffffff"/>
+      </svg>
+      <div>
+        <h2 style="margin:0;">HRMS Portal &bull; Payslip</h2>
+        <p style="margin:.2rem 0 0;color:var(--mut);">Salary statement for {{ month_name }} {{ s.year }}</p>
+      </div>
+    </div>
+    <div class="amount">
+      <span>Net Salary Payout</span>
+      <b>{{ currency }} {{ s.net|floatformat:2 }}</b>
+    </div>
+  </header>
+  <dl class="meta">
+    <div><dt>Employee Name</dt><dd><b>{{ s.calculation_snapshot.name|default:s.emp.name }}</b></dd></div>
+    <div><dt>Employee ID</dt><dd>{{ s.emp.employee_number|default:s.emp.id }}</dd></div>
+    <div><dt>Designation</dt><dd>{{ s.calculation_snapshot.designation|default:s.emp.designation }}</dd></div>
+    <div><dt>Department</dt><dd>{{ s.emp.department.name|default:"General" }}</dd></div>
+    <div><dt>Pay Period</dt><dd>{{ month_name }} {{ s.year }}</dd></div>
+    <div><dt>Generated On</dt><dd>{{ s.generated_on|date:"j M Y, H:i" }}</dd></div>
+  </dl>
+  <h3>Attendance Summary</h3>
   <table>
-    <tr><td>Basic salary</td><td class="r">{{ currency }} {{ basic }}</td></tr>
-    {% if s.overtime_pay %}<tr><td>Overtime ({{ overtime_text }})</td><td class="r">+ {{ currency }} {{ s.overtime_pay }}</td></tr>{% endif %}
-    {% for description, kind, amount in components %}<tr><td>{{ description }}</td><td class="r">{% if kind == "DEDUCTION" %}-{% else %}+{% endif %} {{ currency }} {{ amount }}</td></tr>{% endfor %}
-    <tr><td>Gross pay</td><td class="r">{{ currency }} {{ s.gross }}</td></tr>
-    <tr><td>Per-day pay</td><td class="r">{{ currency }} {{ s.per_day_pay }}</td></tr>
-    <tr><td>Absent days</td><td class="r">{{ s.absent_days }}</td></tr>
-    <tr><td>Total deductions</td><td class="r">- {{ currency }} {{ s.deduction }}</td></tr>
-    <tr class="total"><td>Net salary</td><td class="r">{{ currency }} {{ s.net }}</td></tr>
+    <thead>
+      <tr><th>Present Days</th><th>Half Days</th><th>Approved Leaves</th><th>Absent Days</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>{{ c.present }}</td><td>{{ c.half }}</td><td>{{ c.leave }}</td><td>{{ c.absent }}</td></tr>
+    </tbody>
   </table>
-  <footer>Computer-generated slip. No signature required.</footer>
+  <h3>Earnings &amp; Deductions Breakdown</h3>
+  <table>
+    <thead>
+      <tr><th>Component</th><th class="r">Amount</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Basic Salary</td><td class="r">{{ currency }} {{ basic|floatformat:2 }}</td></tr>
+      {% if s.overtime_pay %}
+      <tr><td>Overtime Pay ({{ overtime_text }})</td><td class="r" style="color:var(--ok);">+ {{ currency }} {{ s.overtime_pay|floatformat:2 }}</td></tr>
+      {% endif %}
+      {% for description, kind, amount in components %}
+      <tr>
+        <td>{{ description }}</td>
+        <td class="r" {% if kind == "DEDUCTION" %}style="color:var(--bad);"{% else %}style="color:var(--ok);"{% endif %}>
+          {% if kind == "DEDUCTION" %}-{% else %}+{% endif %} {{ currency }} {{ amount|floatformat:2 }}
+        </td>
+      </tr>
+      {% endfor %}
+      <tr><td>Gross Salary</td><td class="r"><b>{{ currency }} {{ s.gross|floatformat:2 }}</b></td></tr>
+      <tr><td>Per-Day Pay Calculation Rate</td><td class="r">{{ currency }} {{ s.per_day_pay|floatformat:2 }}</td></tr>
+      {% if s.absent_days %}
+      <tr><td>Absent Days Deductions ({{ s.absent_days }} days)</td><td class="r" style="color:var(--bad);">- {{ currency }} {{ s.deduction|floatformat:2 }}</td></tr>
+      {% else %}
+      <tr><td>Total Deductions</td><td class="r">- {{ currency }} {{ s.deduction|floatformat:2 }}</td></tr>
+      {% endif %}
+      <tr class="total">
+        <td><b>Net Payable Salary</b></td>
+        <td class="r"><b>{{ currency }} {{ s.net|floatformat:2 }}</b></td>
+      </tr>
+    </tbody>
+  </table>
+  <footer>This is a system-generated salary slip from HRMS Portal. No signature required.</footer>
 </article>
 {% endblock %}

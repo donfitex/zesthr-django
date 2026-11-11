@@ -5,7 +5,7 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 
-from .models import Attendance, Employee, LeaveApplication
+from .models import Attendance, Department, Employee, JobPosition, LeaveApplication, WorkSchedule
 from .services.leave import validate_leave_request
 from .account_labels import label_user_choices
 
@@ -161,3 +161,51 @@ class LeaveApplicationForm(forms.ModelForm):
         validate_leave_request(self.employee, cleaned.get("leave_type"),
                                cleaned.get("start_date"), cleaned.get("end_date"))
         return cleaned
+
+
+class DepartmentForm(forms.ModelForm):
+    class Meta:
+        model = Department
+        fields = ["name", "code", "work_schedule", "is_active"]
+        labels = {"name": "Department Name", "code": "Short Code", "work_schedule": "Default Work Schedule", "is_active": "Active"}
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user is not None:
+            from apps.organizations.tenancy import organization_ids_for
+            from apps.organizations.models import Organization
+            from core.models import default_organization
+            if not self.instance.pk:
+                org_ids = organization_ids_for(user)
+                if org_ids:
+                    self.instance.organization = Organization.objects.filter(id__in=org_ids).first() or default_organization()
+                else:
+                    self.instance.organization = default_organization()
+            if "work_schedule" in self.fields:
+                self.fields["work_schedule"].queryset = scope_model_queryset(WorkSchedule.objects.filter(is_active=True), user)
+
+
+class DesignationForm(forms.ModelForm):
+    class Meta:
+        model = JobPosition
+        fields = ["title", "department", "is_active"]
+        labels = {"title": "Designation Title", "department": "Department", "is_active": "Active"}
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+        if user is not None:
+            from apps.organizations.tenancy import organization_ids_for
+            from apps.organizations.models import Organization
+            from core.models import default_organization
+            if not self.instance.pk:
+                org_ids = organization_ids_for(user)
+                if org_ids:
+                    self.instance.organization = Organization.objects.filter(id__in=org_ids).first() or default_organization()
+                else:
+                    self.instance.organization = default_organization()
+            if "department" in self.fields:
+                self.fields["department"].queryset = scope_model_queryset(Department.objects.filter(is_active=True), user)
+
+

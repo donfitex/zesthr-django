@@ -1,21 +1,104 @@
 {% extends "base.html" %}
+{% block title %}Dashboard | HRMS Portal{% endblock %}
 {% block content %}
-<div class="head"><h1>Today, {{ today|date:"j F Y" }}</h1>
-  <div class="actions">{% if perms.core.mark_attendance %}<a class="btn" href="{% url 'attendance_today' %}">Mark attendance</a>{% endif %}{% if perms.core.view_all_leaves %}<a class="btn ghost" href="{% url 'leaves_list' %}">Leave requests</a>{% endif %}<a class="btn ghost" href="{% url 'holidays' %}">Govt holidays</a>{% if perms.core.add_employee %}<a class="btn ghost" href="{% url 'employee_add' %}">Add employee</a>{% endif %}</div></div>
-<section class="stats">
-  <a class="stat" href="{% url 'employee_list' %}"><span>Active employees</span><b>{{ total }}</b></a>
-  <a class="stat ok" href="{% url 'attendance_today' %}"><span>Present today</span><b>{{ present }}</b></a>
-  <a class="stat bad" href="{% url 'attendance_today' %}"><span>Absent today</span><b>{{ absent }}</b></a>
-  <a class="stat warn" href="{% url 'attendance_today' %}"><span>On leave</span><b>{{ leave }}</b></a>
-  <a class="stat" href="{% url 'attendance_today' %}"><span>Not marked yet</span><b>{{ unmarked }}</b></a>
-  {% if pending_leaves is not None %}<a class="stat warn" href="{% url 'leaves_list' %}"><span>Pending leaves</span><b>{{ pending_leaves }}</b></a>{% endif %}
-  {% if pending_corrections is not None %}<a class="stat warn" href="{% url 'correction_list' %}"><span>Correction requests</span><b>{{ pending_corrections }}</b></a>{% endif %}
-  {% if payroll is not None %}<a class="stat navy" href="{% url 'payroll' %}"><span>This month's net payroll</span><b>₹{{ payroll|floatformat:0 }}</b></a>{% endif %}
+<div class="head">
+  <div>
+    <h1>HRMS Dashboard <small>{{ today|date:"l, j F Y" }}</small></h1>
+    <p class="muted">Overview of employees, today's attendance, pending leaves, and celebrations.</p>
+  </div>
+  <div class="actions">
+    {% if perms.core.mark_attendance %}<a class="btn" href="{% url 'attendance_today' %}">Today's Attendance</a>{% endif %}
+    {% if perms.core.view_all_leaves %}<a class="btn ghost" href="{% url 'leaves_list' %}">Leave Requests{% if pending_leaves %} ({{ pending_leaves }}){% endif %}</a>{% endif %}
+    <a class="btn ghost" href="{% url 'holidays' %}">Holiday Calendar</a>
+    {% if perms.core.add_employee %}<a class="btn ghost" href="{% url 'employee_add' %}">+ Add Employee</a>{% endif %}
+  </div>
+</div>
+
+<!-- KEY METRICS -->
+<section class="stats" aria-label="Key HR Metrics">
+  <a class="stat" href="{% url 'employee_list' %}">
+    <span>Total Employees</span>
+    <b>{{ total }}</b>
+  </a>
+  <a class="stat ok" href="{% url 'attendance_today' %}">
+    <span>Present Today</span>
+    <b>{{ present }}</b>
+  </a>
+  <a class="stat bad" href="{% url 'attendance_today' %}">
+    <span>Absent Today</span>
+    <b>{{ absent }}</b>
+  </a>
+  <a class="stat warn" href="{% url 'attendance_today' %}">
+    <span>On Leave</span>
+    <b>{{ leave }}</b>
+  </a>
+  <a class="stat" href="{% url 'attendance_today' %}">
+    <span>Not Marked Yet</span>
+    <b>{{ unmarked }}</b>
+  </a>
+  {% if pending_leaves is not None %}
+  <a class="stat warn" href="{% url 'leaves_list' %}?status=PENDING">
+    <span>Pending Leaves</span>
+    <b>{{ pending_leaves }}</b>
+  </a>
+  {% endif %}
+  {% if pending_corrections is not None %}
+  <a class="stat warn" href="{% url 'correction_list' %}">
+    <span>Regularization Requests</span>
+    <b>{{ pending_corrections }}</b>
+  </a>
+  {% endif %}
+  {% if payroll is not None %}
+  <a class="stat navy" href="{% url 'payroll' %}">
+    <span>This Month's Net Payroll</span>
+    <b>₹{{ payroll|floatformat:0 }}</b>
+  </a>
+  {% endif %}
 </section>
+
+<!-- HIGHLIGHTS SECTION: TODAY'S BIRTHDAYS & WORK ANNIVERSARIES -->
+{% include "partials/highlights.html" %}
+
+<!-- TODAY'S ATTENDANCE & RECENT CHECK-INS -->
 <section class="card">
-  <h2>Latest check-ins</h2>
-  {% if recent %}<table><tr><th>Employee</th><th>Status</th><th>In</th><th>Out</th></tr>
-  {% for a in recent %}<tr><td>{{ a.emp.name }}</td><td><span class="tag {{ a.status }}">{{ a.get_status_display }}</span></td><td>{{ a.check_in|time:"H:i"|default:"-" }}</td><td>{{ a.check_out|time:"H:i"|default:"-" }}</td></tr>{% endfor %}</table>
-  {% else %}<p class="empty">No attendance marked today. <a href="{% url 'attendance_today' %}">Start with check-ins.</a></p>{% endif %}
+  <div class="card-head">
+    <h2>Today's Attendance &amp; Recent Punches</h2>
+    <div class="actions">
+      <a class="btn sm ghost" href="{% url 'attendance_today' %}">Mark / Punch</a>
+      <a class="btn sm ghost" href="{% url 'attendance_register' %}">Daily Register</a>
+      <a class="btn sm ghost" href="{% url 'attendance_list' %}">View All Logs &rarr;</a>
+    </div>
+  </div>
+  {% if recent %}
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Status</th>
+          <th>Check-in</th>
+          <th>Check-out</th>
+          <th>Hours</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in recent %}
+        <tr>
+          <td>
+            <b>{{ a.emp.name }}</b>
+            <div class="muted">{{ a.emp.designation }}{% if a.emp.department %} &bull; {{ a.emp.department.name }}{% endif %}</div>
+          </td>
+          <td><span class="tag {{ a.status }}">{{ a.get_status_display }}</span></td>
+          <td>{{ a.check_in|time:"H:i"|default:"-" }}</td>
+          <td>{{ a.check_out|time:"H:i"|default:"-" }}</td>
+          <td>{{ a.hours|default:"-" }}{% if a.ends_next_day %} <small>(+1d)</small>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty">No attendance marked today yet. <a href="{% url 'attendance_today' %}">Check in employees now &rarr;</a></p>
+  {% endif %}
 </section>
 {% endblock %}

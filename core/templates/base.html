@@ -33,68 +33,87 @@
       <circle cx="29" cy="11" r="2.2" fill="#a7f3d0"/>
     </svg>
     <div class="hros-brand-text">
-      <span class="hros-title">HROS</span>
-      <span class="hros-sub">CORE</span>
+      <span class="hros-title">HRMS Portal</span>
+      <span class="hros-sub">Core</span>
     </div>
   </a>
   <nav aria-label="Main navigation">
-    {% if perms.core.view_attendance_audit %}<a href="{% url 'compliance_report' %}">Audit activity</a>{% endif %}
-    <a class="{% if n == 'home' %}on{% endif %}" href="{% url 'home' %}">Overview (Home)</a>
-    <a class="{% if n == 'dashboard' %}on{% endif %}" href="{% url 'dashboard' %}">
-      {% if perms.core.view_all_attendance %}Dashboard{% else %}My Dashboard{% endif %}
+    <!-- DASHBOARD -->
+    <a class="{% if n == 'dashboard' or n == 'home' %}on{% endif %}" href="{% url 'dashboard' %}">
+      Dashboard
     </a>
 
-    {% if user.employee_profile %}<a href="{% url 'leave_balances' %}">My leave balances</a>{% if perms.core.view_all_attendance %}<a class="{% if n == 'my_portal' %}on{% endif %}" href="{% url 'my_portal' %}">My portal</a>{% endif %}<a class="{% if n == 'my_profile' or n == 'my_profile_edit' %}on{% endif %}" href="{% url 'my_profile' %}">My profile</a>{% endif %}
-
-    {% if perms.core.view_all_attendance %}
-    {% if perms.core.view_employee %}
-    <details {% if 'employee' in n %}open{% endif %}><summary>Employees</summary>
-      <a class="{% if n == 'employee_list' %}on{% endif %}" href="{% url 'employee_list' %}">All employees</a>
-      {% if perms.core.add_employee %}<a class="{% if n == 'employee_add' %}on{% endif %}" href="{% url 'employee_add' %}">Add employee</a>{% endif %}
+    <!-- EMPLOYEES -->
+    {% if perms.core.view_employee or perms.core.view_all_attendance %}
+    <details {% if 'employee' in n or 'department' in n or 'designation' in n or n == 'my_profile' %}open{% endif %}><summary>Employees</summary>
+      <a class="{% if n == 'employee_list' %}on{% endif %}" href="{% url 'employee_list' %}">All Employees</a>
+      {% if perms.core.add_employee %}<a class="{% if n == 'employee_add' %}on{% endif %}" href="{% url 'employee_add' %}">Add Employee</a>{% endif %}
+      <a class="{% if 'department' in n %}on{% endif %}" href="{% url 'department_list' %}">Departments</a>
+      <a class="{% if 'designation' in n %}on{% endif %}" href="{% url 'designation_list' %}">Designations</a>
+      {% if user.employee_profile %}<a class="{% if n == 'my_profile' or n == 'my_profile_edit' %}on{% endif %}" href="{% url 'my_profile' %}">My Profile</a>{% if perms.core.view_all_attendance %}<a class="{% if n == 'my_portal' %}on{% endif %}" href="{% url 'my_portal' %}">My portal</a>{% endif %}{% endif %}
     </details>
-    {% endif %}
-    <details {% if 'attendance' in n %}open{% endif %}><summary>Attendance</summary>
-      {% if perms.core.mark_attendance %}<a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Today: check-in / out</a>{% endif %}
-      <a class="{% if n == 'attendance_register' %}on{% endif %}" href="{% url 'attendance_register' %}">Daily register</a>
-      <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">Attendance log</a>
-      <a href="{% url 'anomaly_queue' %}">Exception reviews</a>
-      <a class="{% if n == 'attendance_exceptions' %}on{% endif %}" href="{% url 'attendance_exceptions' %}">Exceptions</a>
-      {% if perms.core.view_attendance_audit %}<a class="{% if n == 'attendance_history' %}on{% endif %}" href="{% url 'attendance_history' %}">Change history</a>{% endif %}
-      <a class="{% if n == 'attendance_missing_punches' %}on{% endif %}" href="{% url 'attendance_missing_punches' %}">Missing punches</a>
-      {% if is_correction_reviewer %}<a class="{% if n == 'correction_list' %}on{% endif %}" href="{% url 'correction_list' %}">Correction requests{% if pending_corrections %} <span class="hros-badge">{{ pending_corrections }}</span>{% endif %}</a>{% endif %}
-      {% if perms.core.add_attendance %}<a class="{% if n == 'attendance_add' %}on{% endif %}" href="{% url 'attendance_add' %}">Add manual entry</a>{% endif %}
-    </details>
-    {% if perms.core.view_all_leaves %}
-    <details {% if 'leave' in n %}open{% endif %}><summary>Leaves</summary>
-      <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">Leave requests</a>
-      {% if user.employee_profile.is_active %}<a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply leave</a>{% endif %}
-    </details>
-    {% endif %}
-    {% if perms.core.view_payroll_report %}
-    <details {% if n == 'report' %}open{% endif %}><summary>Reports</summary>
-      <a class="{% if n == 'report' %}on{% endif %}" href="{% url 'report' %}">Monthly attendance report</a>
-    </details>
-    <details {% if n == 'payroll' or n == 'slip' %}open{% endif %}><summary>Payroll</summary>
-      <a class="{% if n == 'payroll' %}on{% endif %}" href="{% url 'payroll' %}">Salary register</a>
-    </details>
-    {% endif %}
-    <a class="{% if n == 'holidays' %}on{% endif %}" href="{% url 'holidays' %}">Public holidays</a>
-    {% if user.is_staff %}<a href="/admin/">Admin panel</a>{% endif %}
-
     {% elif user.employee_profile %}
-    {% if user.employee_profile.is_active %}<a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Punch Attendance</a>{% endif %}
-    <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">My Attendance Log</a>
-    {% if user.employee_profile %}<a class="{% if n == 'my_corrections' or n == 'correction_new' %}on{% endif %}" href="{% url 'my_corrections' %}">My corrections</a>{% endif %}
-    {% if is_correction_reviewer %}<a class="{% if n == 'correction_list' %}on{% endif %}" href="{% url 'correction_list' %}">Corrections to review{% if pending_corrections %} <span class="hros-badge">{{ pending_corrections }}</span>{% endif %}</a>{% endif %}
-    <details {% if 'leave' in n %}open{% endif %}><summary>Leaves</summary>
-      {% if user.employee_profile.is_active %}<a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply leave</a>{% endif %}
-      <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">My Leave Requests</a>
+    <details {% if n == 'my_profile' or n == 'my_profile_edit' %}open{% endif %}><summary>Employees</summary>
+      <a class="{% if n == 'my_profile' or n == 'my_profile_edit' %}on{% endif %}" href="{% url 'my_profile' %}">My Profile</a>
     </details>
-    <a class="{% if n == 'holidays' %}on{% endif %}" href="{% url 'holidays' %}">Public holidays</a>
-    {% elif user.is_staff %}
-    <a href="/admin/">Admin panel</a>
     {% endif %}
-    {% if user.is_active and user.is_staff %}<a href="{% url 'admin_guide' %}">Administrative panel guide</a>{% endif %}
+
+    <!-- ATTENDANCE -->
+    <details {% if 'attendance' in n or 'correction' in n or 'anomaly' in n %}open{% endif %}><summary>Attendance</summary>
+      {% if perms.core.mark_attendance %}
+        <a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Today: Check-in / Out</a>
+      {% elif user.employee_profile and user.employee_profile.is_active %}
+        <a class="{% if n == 'attendance_today' %}on{% endif %}" href="{% url 'attendance_today' %}">Punch Attendance</a>
+      {% endif %}
+
+      {% if perms.core.view_all_attendance %}
+        <a class="{% if n == 'attendance_register' %}on{% endif %}" href="{% url 'attendance_register' %}">Daily Register</a>
+      {% endif %}
+
+      <a class="{% if n == 'attendance_list' %}on{% endif %}" href="{% url 'attendance_list' %}">Attendance Log</a>
+
+      {% if user.employee_profile and user.employee_profile.is_active %}
+        <a class="{% if n == 'correction_new' %}on{% endif %}" href="{% url 'correction_new' %}">Regularize Missed Punch</a>
+      {% endif %}
+
+      {% if user.employee_profile %}
+        <a class="{% if n == 'my_corrections' %}on{% endif %}" href="{% url 'my_corrections' %}">My Regularizations</a>
+      {% endif %}
+
+      {% if is_correction_reviewer %}
+        <a class="{% if n == 'correction_list' %}on{% endif %}" href="{% url 'correction_list' %}">Review Regularizations{% if pending_corrections %} <span class="hros-badge">{{ pending_corrections }}</span>{% endif %}</a>
+      {% endif %}
+
+      {% if perms.core.view_all_attendance %}
+        <a class="{% if n == 'attendance_missing_punches' %}on{% endif %}" href="{% url 'attendance_missing_punches' %}">Missing Punches</a>
+        {% if perms.core.view_attendance_audit %}<a class="{% if n == 'attendance_history' %}on{% endif %}" href="{% url 'attendance_history' %}">Change History</a>{% endif %}
+      {% endif %}
+    </details>
+
+    <!-- LEAVE REQUESTS -->
+    <details {% if 'leave' in n or n == 'holidays' %}open{% endif %}><summary>Leave Requests</summary>
+      {% if user.employee_profile and user.employee_profile.is_active %}
+        <a class="{% if n == 'leave_apply' %}on{% endif %}" href="{% url 'leave_apply' %}">Apply Leave</a>
+      {% endif %}
+      <a class="{% if n == 'leaves_list' %}on{% endif %}" href="{% url 'leaves_list' %}">{% if perms.core.view_all_leaves %}Leave Applications{% else %}My Leave Requests{% endif %}</a>
+      <a class="{% if n == 'leave_balances' or n == 'employee_leave_balances' %}on{% endif %}" href="{% url 'leave_balances' %}">Leave Balances</a>
+      <a class="{% if n == 'holidays' %}on{% endif %}" href="{% url 'holidays' %}">Holiday Calendar</a>
+    </details>
+
+    <!-- PAYROLL -->
+    <details {% if 'payroll' in n or n == 'slip' or n == 'report' %}open{% endif %}><summary>Payroll</summary>
+      {% if perms.core.view_payroll_report %}
+        <a class="{% if n == 'payroll' %}on{% endif %}" href="{% url 'payroll' %}">Monthly Salary Records</a>
+        <a class="{% if n == 'payroll_runs' or n == 'payroll_run_detail' %}on{% endif %}" href="{% url 'payroll_runs' %}">Payroll Runs</a>
+        <a class="{% if n == 'report' %}on{% endif %}" href="{% url 'report' %}">Salary &amp; Attendance Report</a>
+      {% elif user.employee_profile %}
+        <a class="{% if n == 'slip' %}on{% endif %}" href="{% url 'dashboard' %}">My Payslips</a>
+      {% endif %}
+    </details>
+
+    {% if perms.core.view_attendance_audit %}<a class="{% if n == 'compliance_report' %}on{% endif %}" href="{% url 'compliance_report' %}">Audit Activity</a>{% endif %}
+    {% if user.is_staff %}<a href="/admin/">Admin Panel</a>{% endif %}
+    {% if user.is_active and user.is_staff %}<a class="{% if n == 'admin_guide' %}on{% endif %}" href="{% url 'admin_guide' %}">Admin Guide</a>{% endif %}
   </nav>
 </aside>
 <div class="main">
